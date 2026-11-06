@@ -16,7 +16,7 @@
 ## Current Architecture & Project State
 - Godot 4.7.2 .NET project (`project.godot`, `SpaceExtraction.csproj`, `SpaceExtraction.sln`) configured with `gl_compatibility` renderer.
 - Agent hierarchy configured in `agents.md` and `.agents/agents/` (`flash-coder`, `flash-researcher`, `flash-reviewer`).
-- Git repository initialized locally (configured user: `ericmoskvin`, no remote `origin` linked yet).
+- Git repository initialized locally (configured user: `ericmoskvin`, remote `origin` set to `https://github.com/ericmoskvin/space-extraction.git`).
 
 ## Explicit Next Steps (Milestone 0 — Project Foundation)
 1. Establish the core folder structure under the project root (e.g., `Scenes/`, `Scripts/` or domain-based modules for `Match`, `World`, `Ships`, `Characters`, `Networking`).
