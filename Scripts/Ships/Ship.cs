@@ -912,29 +912,32 @@ public partial class Ship : CharacterBody2D
             Subsystems.ApplySubsystemDamage(targetSubsystem, subsystemDamage);
             Rpc(MethodName.SyncSubsystemsStateRpc, Subsystems.CurrentEngineHealth, Subsystems.CurrentWeaponsHealth, Subsystems.CurrentTurretHealth);
 
-            if (subsystemDamage >= 20.0f)
+            InteriorRoomType hitRoom = ShipDamageControl.GetRoomForSubsystem(targetSubsystem);
+            if (hitRoom != InteriorRoomType.None)
             {
-                InteriorRoomType hitRoom = ShipDamageControl.GetRoomForSubsystem(targetSubsystem);
-                if (hitRoom != InteriorRoomType.None)
+                float currentHealth = targetSubsystem switch
                 {
-                    float currentHealth = targetSubsystem switch
-                    {
-                        ShipSubsystemType.Engines => Subsystems.CurrentEngineHealth,
-                        ShipSubsystemType.Weapons => Subsystems.CurrentWeaponsHealth,
-                        ShipSubsystemType.Turret => Subsystems.CurrentTurretHealth,
-                        _ => 0f
-                    };
-                    float maxHealth = targetSubsystem switch
-                    {
-                        ShipSubsystemType.Engines => Subsystems.MaxEngineHealth,
-                        ShipSubsystemType.Weapons => Subsystems.MaxWeaponsHealth,
-                        ShipSubsystemType.Turret => Subsystems.MaxTurretHealth,
-                        _ => 1f
-                    };
+                    ShipSubsystemType.Engines => Subsystems.CurrentEngineHealth,
+                    ShipSubsystemType.Weapons => Subsystems.CurrentWeaponsHealth,
+                    ShipSubsystemType.Turret => Subsystems.CurrentTurretHealth,
+                    _ => 0f
+                };
+                float maxHealth = targetSubsystem switch
+                {
+                    ShipSubsystemType.Engines => Subsystems.MaxEngineHealth,
+                    ShipSubsystemType.Weapons => Subsystems.MaxWeaponsHealth,
+                    ShipSubsystemType.Turret => Subsystems.MaxTurretHealth,
+                    _ => 1f
+                };
 
-                    if (currentHealth <= maxHealth * 0.75f || currentHealth <= 0.0f)
+                // Any weapon hit that pushes a subsystem to <= 65% HP (or hits an already-disabled subsystem) ignites/stokes fire
+                if (currentHealth <= maxHealth * 0.65f || currentHealth <= 0.0f)
+                {
+                    float addedFire = !DamageControl.IsRoomOnFire(hitRoom)
+                        ? 45.0f
+                        : Mathf.Clamp(subsystemDamage * 0.6f, 8.0f, 35.0f);
+                    if (DamageControl.IgniteRoom(hitRoom, addedFire))
                     {
-                        DamageControl.IgniteRoom(hitRoom, 45.0f);
                         BroadcastDamageControlStateServer();
                     }
                 }
@@ -1505,15 +1508,39 @@ public partial class Ship : CharacterBody2D
                 DrawLine(p1, p2, coverOutlineColor, 1.8f);
             }
 
-            // Milestone 4: Exterior fire warning border glow
+            // Milestone 4: Exterior hull fire plumes & warning border glow (visible when roof cover is opaque)
             if (DamageControl != null && DamageControl.IsAnyRoomOnFire)
             {
-                Color fireGlowColor = new Color(1.0f, 0.35f, 0.05f, 0.45f * ExteriorRoofAlpha);
+                float pulse = 0.75f + 0.25f * Mathf.Sin((float)Time.GetTicksMsec() * 0.012f);
+                Color fireGlowColor = new Color(1.0f, 0.35f, 0.05f, 0.65f * pulse * ExteriorRoofAlpha);
                 for (int i = 0; i < BodyPolygon.Length; i++)
                 {
                     Vector2 p1 = BodyPolygon[i];
                     Vector2 p2 = BodyPolygon[(i + 1) % BodyPolygon.Length];
                     DrawLine(p1, p2, fireGlowColor, 4.0f);
+                }
+
+                if (Interior != null)
+                {
+                    for (int i = 0; i < Interior.Rooms.Count; i++)
+                    {
+                        InteriorRoom room = Interior.Rooms[i];
+                        if (!DamageControl.IsRoomOnFire(room.RoomType))
+                        {
+                            continue;
+                        }
+
+                        float fireFrac = Mathf.Clamp(DamageControl.GetRoomFireIntensity(room.RoomType) / 100.0f, 0.25f, 1.0f);
+                        Vector2 center = room.Bounds.GetCenter();
+                        float r = (12.0f + 8.0f * fireFrac) * pulse;
+
+                        // Dark smoke ring + scorched hull patch + bright venting flames on exterior roof
+                        DrawCircle(center, r * 1.45f, new Color(0.08f, 0.06f, 0.05f, 0.72f * ExteriorRoofAlpha));
+                        DrawCircle(center + new Vector2(-14.0f, -4.0f), r * 0.85f, new Color(1.0f, 0.28f, 0.05f, 0.90f * ExteriorRoofAlpha));
+                        DrawCircle(center + new Vector2(14.0f, 4.0f), r * 0.85f, new Color(1.0f, 0.28f, 0.05f, 0.90f * ExteriorRoofAlpha));
+                        DrawCircle(center, r * 1.1f, new Color(1.0f, 0.32f, 0.05f, 0.95f * ExteriorRoofAlpha));
+                        DrawCircle(center, r * 0.6f, new Color(1.0f, 0.88f, 0.22f, 0.98f * ExteriorRoofAlpha));
+                    }
                 }
             }
         }

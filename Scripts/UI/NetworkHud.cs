@@ -578,8 +578,12 @@ public partial class NetworkHud : CanvasLayer
         {
             Ship ship = ships[i];
             string stateTag = ship.Hull.IsDisabled ? " [DISABLED]" : (ship.Subsystems.IsEnginesDisabled ? " [ENG OUT]" : "");
+            if (ship.DamageControl != null && ship.DamageControl.IsAnyRoomOnFire)
+            {
+                stateTag += $" [FIRE x{ship.DamageControl.BurningRoomCount}]";
+            }
             _hudStringBuilder.AppendLine(
-                $"• [{ship.ShipId}] {ship.ShipName} Hull:{ship.Hull.CurrentHull:F0}/{ship.Hull.MaxHull:F0} Eng:{ship.Subsystems.CurrentEngineHealth:F0}{stateTag}");
+                $"• [{ship.ShipId}] {ship.ShipName} Hull:{ship.Hull.CurrentHull:F0}/{ship.Hull.MaxHull:F0} Eng:{ship.Subsystems.CurrentEngineHealth:F0} Wpn:{ship.Subsystems.CurrentWeaponsHealth:F0} Tur:{ship.Subsystems.CurrentTurretHealth:F0}{stateTag}");
         }
 
         _playersListLabel.Text = _hudStringBuilder.ToString().TrimEnd();
