@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using SpaceExtraction.Characters;
+using SpaceExtraction.Interiors;
 using SpaceExtraction.Match;
 using SpaceExtraction.Networking;
 using SpaceExtraction.Ships;
@@ -81,7 +82,7 @@ public partial class NetworkHud : CanvasLayer
 
         var titleLabel = new Label
         {
-            Text = "2D SPACE EXTRACTION — MILESTONE 3",
+            Text = "2D SPACE EXTRACTION — MILESTONE 4",
             HorizontalAlignment = HorizontalAlignment.Center
         };
         rootVBox.AddChild(titleLabel);
@@ -201,7 +202,7 @@ public partial class NetworkHud : CanvasLayer
 
         var controlsHint = new Label
         {
-            Text = "WASD: Fly/Walk | E: Use/Leave Console | F: Door | Space/Click: Fire | 1/2/3: Wpn | R: Reload | T: Swap Pilot/Turret | Scroll: Zoom",
+            Text = "WASD: Fly/Walk | E: Use/Leave/Extinguish | R: Repair/Extinguish/Reload | F: Door | Space/Click: Fire | 1/2/3: Wpn | T: Swap Role | Scroll: Zoom",
             Modulate = new Color(0.75f, 0.85f, 1.0f),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
@@ -375,12 +376,39 @@ public partial class NetworkHud : CanvasLayer
                 interiorLine = $"\nStatus: {role} in {localChar.CurrentInteriorRoom}{prompt}";
             }
 
+            string emergencyLine = string.Empty;
+            if (localShip.DamageControl != null)
+            {
+                if (localShip.DamageControl.IsAnyRoomOnFire)
+                {
+                    var fireRooms = new System.Collections.Generic.List<string>();
+                    for (int r = 0; r < localShip.Interior.Rooms.Count; r++)
+                    {
+                        InteriorRoomType room = localShip.Interior.Rooms[r].RoomType;
+                        if (localShip.DamageControl.IsRoomOnFire(room))
+                        {
+                            fireRooms.Add($"{room} ({localShip.DamageControl.GetRoomFireIntensity(room):F0}%)");
+                        }
+                    }
+                    emergencyLine = $"\nEMERGENCY: {string.Join(", ", fireRooms)} ON FIRE — Press [E]/[R] in room to Extinguish & Repair!";
+                }
+                else if (localShip.Subsystems.IsEnginesDisabled || localShip.Subsystems.IsWeaponsDisabled || localShip.Subsystems.IsTurretDisabled)
+                {
+                    emergencyLine = "\nWARNING: Subsystems Disabled — Press [R] in compartment or use Console to Repair!";
+                }
+            }
+
+            string suppliesText = localShip.DamageControl != null
+                ? $" | Supplies: {localShip.DamageControl.CurrentRepairSupplies:F0}/{ShipDamageControl.MaxRepairSupplies:F0}"
+                : string.Empty;
+
             _localShipLabel.Text =
                 $"Ship: {localShip.ShipName} [{localShip.ShipClass}] ({statusState})\n" +
-                $"Hull: {localShip.Hull.CurrentHull:F0}/{localShip.Hull.MaxHull:F0} | Eng: {localShip.Subsystems.CurrentEngineHealth:F0} | Wpn: {localShip.Subsystems.CurrentWeaponsHealth:F0} | Tur: {localShip.Subsystems.CurrentTurretHealth:F0}\n" +
+                $"Hull: {localShip.Hull.CurrentHull:F0}/{localShip.Hull.MaxHull:F0} | Eng: {localShip.Subsystems.CurrentEngineHealth:F0} | Wpn: {localShip.Subsystems.CurrentWeaponsHealth:F0} | Tur: {localShip.Subsystems.CurrentTurretHealth:F0}{suppliesText}\n" +
                 $"Weapon [{localShip.ActiveWeaponIndex + 1}]: {wpn.WeaponName} ({ammoState}) | Turret: {turretState}\n" +
                 $"Speed: {localShip.Velocity.Length():F0} u/s | Boost: {boostState}" +
-                interiorLine;
+                interiorLine +
+                emergencyLine;
             _localShipLabel.Visible = true;
         }
         else

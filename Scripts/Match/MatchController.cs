@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using SpaceExtraction.Characters;
+using SpaceExtraction.Interiors;
 using SpaceExtraction.Networking;
 using SpaceExtraction.Ships;
 using SpaceExtraction.World;
@@ -197,6 +198,17 @@ public partial class MatchController : Node
             {
                 existingShip.RpcId(identity.PeerId, Ship.MethodName.SyncDoorsStateRpc,
                     existingShip.Interior.GetDoorsBitmask());
+            }
+
+            if (existingShip.DamageControl != null)
+            {
+                existingShip.RpcId(identity.PeerId, Ship.MethodName.SyncDamageControlStateRpc,
+                    existingShip.DamageControl.GetRoomFireIntensity(InteriorRoomType.Cockpit),
+                    existingShip.DamageControl.GetRoomFireIntensity(InteriorRoomType.CentralHub),
+                    existingShip.DamageControl.GetRoomFireIntensity(InteriorRoomType.EngineRoom),
+                    existingShip.DamageControl.GetRoomFireIntensity(InteriorRoomType.Cargo),
+                    existingShip.DamageControl.GetRoomFireIntensity(InteriorRoomType.Medical),
+                    existingShip.DamageControl.CurrentRepairSupplies);
             }
         }
 

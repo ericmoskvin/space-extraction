@@ -37,6 +37,7 @@ public partial class PlayerCharacter : CharacterBody2D
 
     private bool _prevInteractKey;
     private bool _prevDoorKey;
+    private bool _prevRepairKey;
 
     private Label? _nameLabel;
     private Camera2D? _camera;
@@ -261,6 +262,10 @@ public partial class PlayerCharacter : CharacterBody2D
                     bool doorJustPressed = doorPressed && !_prevDoorKey;
                     _prevDoorKey = doorPressed;
 
+                    bool repairPressed = Input.IsPhysicalKeyPressed(Key.R);
+                    bool repairJustPressed = repairPressed && !_prevRepairKey;
+                    _prevRepairKey = repairPressed;
+
                     if (interactJustPressed)
                     {
                         occupiedShip.RequestInteractFromLocalPlayer();
@@ -268,6 +273,10 @@ public partial class PlayerCharacter : CharacterBody2D
                     if (doorJustPressed)
                     {
                         occupiedShip.RequestToggleNearestDoorFromLocalPlayer();
+                    }
+                    if (!isPiloting && !isGunner && repairJustPressed)
+                    {
+                        occupiedShip.RequestRepairOrExtinguishFromLocalPlayer();
                     }
                 }
 

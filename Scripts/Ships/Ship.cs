@@ -28,6 +28,7 @@ public partial class Ship : CharacterBody2D
     public ShipSubsystems Subsystems { get; private set; } = new();
     public ShipTurret Turret { get; private set; } = new() { LocalMountOffset = new Vector2(-24.0f, 0.0f) };
     public ShipInterior Interior { get; private set; } = ShipInterior.CreateCorvetteInterior();
+    public ShipDamageControl DamageControl { get; private set; } = new();
     public float ExteriorRoofAlpha { get; private set; } = 1.0f;
 
     public IReadOnlyList<ShipWeapon> Weapons => _weapons;
@@ -61,6 +62,8 @@ public partial class Ship : CharacterBody2D
     private TurretControlInput? _testTurretInputOverride;
     private uint _localTurretTick;
     private bool _prevToggleKey;
+    private float _damageControlSyncAccumulator;
+    private float _subsystemFireSyncAccumulator;
 
     private readonly HashSet<long> _occupantPeerIds = new();
 
@@ -115,6 +118,7 @@ public partial class Ship : CharacterBody2D
         Subsystems = new ShipSubsystems();
         Turret = new ShipTurret { LocalMountOffset = new Vector2(-24.0f, 0.0f) };
         Interior = ShipInterior.CreateCorvetteInterior();
+        DamageControl = new ShipDamageControl();
     }
 
     public void Initialize(
@@ -148,6 +152,11 @@ public partial class Ship : CharacterBody2D
             Subsystems.SubsystemsChanged -= OnSubsystemsChanged;
         }
 
+        if (DamageControl != null)
+        {
+            DamageControl.DamageControlStateChanged -= OnDamageControlChanged;
+        }
+
         MovementProfile = ShipMovementProfile.FromClass(shipClass);
         Movement = new ShipMovement(MovementProfile);
         Hull = new ShipHull(MovementProfile.MaxHullIntegrity);
@@ -155,6 +164,9 @@ public partial class Ship : CharacterBody2D
 
         Subsystems = new ShipSubsystems();
         Subsystems.SubsystemsChanged += OnSubsystemsChanged;
+
+        DamageControl = new ShipDamageControl();
+        DamageControl.DamageControlStateChanged += OnDamageControlChanged;
 
         _weapons = new[]
         {
@@ -452,6 +464,16 @@ public partial class Ship : CharacterBody2D
             return;
         }
 
+        InteriorRoomType currentRoom = character.CurrentInteriorRoom;
+
+        // 1. If current room is actively on fire, E key acts as firefighting action!
+        if (DamageControl.IsRoomOnFire(currentRoom))
+        {
+            DamageControl.ExtinguishRoom(currentRoom);
+            BroadcastDamageControlStateServer();
+            return;
+        }
+
         InteriorConsole? console = Interior.FindNearestInteractableConsole(character.ShipLocalPosition);
         if (console != null)
         {
@@ -464,15 +486,23 @@ public partial class Ship : CharacterBody2D
             }
             else if (console.ConsoleType == InteriorConsoleType.Turret && Turret.GunnerPeerId == 0)
             {
-                SetStationRolesServer(PilotPeerId, peerId);
-                character.Rpc(PlayerCharacter.MethodName.ForceSyncInteriorPosRpc, console.SeatOrStandLocalPosition);
+                if (Subsystems.IsTurretDisabled && DamageControl.TryRepairRoomSubsystem(InteriorRoomType.CentralHub, Subsystems))
+                {
+                    Rpc(MethodName.SyncSubsystemsStateRpc, Subsystems.CurrentEngineHealth, Subsystems.CurrentWeaponsHealth, Subsystems.CurrentTurretHealth);
+                    BroadcastDamageControlStateServer();
+                }
+                else
+                {
+                    SetStationRolesServer(PilotPeerId, peerId);
+                    character.Rpc(PlayerCharacter.MethodName.ForceSyncInteriorPosRpc, console.SeatOrStandLocalPosition);
+                }
             }
             else if (console.ConsoleType == InteriorConsoleType.Engineering)
             {
-                if (Subsystems.CurrentEngineHealth < Subsystems.MaxEngineHealth)
+                if (DamageControl.TryRepairRoomSubsystem(InteriorRoomType.EngineRoom, Subsystems))
                 {
-                    Subsystems.RepairSubsystem(ShipSubsystemType.Engines, 15.0f);
                     Rpc(MethodName.SyncSubsystemsStateRpc, Subsystems.CurrentEngineHealth, Subsystems.CurrentWeaponsHealth, Subsystems.CurrentTurretHealth);
+                    BroadcastDamageControlStateServer();
                 }
             }
         }
@@ -482,6 +512,66 @@ public partial class Ship : CharacterBody2D
             if (door != null)
             {
                 SetDoorOpenServer(door.DoorId, !door.IsOpen);
+            }
+        }
+    }
+
+    public void RequestRepairOrExtinguishFromLocalPlayer()
+    {
+        if (Multiplayer.IsServer())
+        {
+            HandlePlayerRepairOrExtinguishServer(Multiplayer.GetUniqueId());
+        }
+        else
+        {
+            RpcId(1, MethodName.RequestRepairOrExtinguishRpc);
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    public void RequestRepairOrExtinguishRpc()
+    {
+        long senderId = Multiplayer.GetRemoteSenderId();
+        if (senderId == 0)
+        {
+            senderId = Multiplayer.GetUniqueId();
+        }
+        HandlePlayerRepairOrExtinguishServer(senderId);
+    }
+
+    public void HandlePlayerRepairOrExtinguishServer(long peerId, bool ignoreCooldown = false)
+    {
+        if (!Multiplayer.IsServer())
+        {
+            return;
+        }
+
+        PlayerCharacter? character = _gameWorld?.GetPlayerCharacter(peerId);
+        if (!_occupantPeerIds.Contains(peerId) &&
+            PilotPeerId != peerId &&
+            Turret.GunnerPeerId != peerId &&
+            (character == null || character.LocationContext.OccupiedShipId != ShipId))
+        {
+            return;
+        }
+
+        if (character == null)
+        {
+            return;
+        }
+
+        InteriorRoomType currentRoom = character.CurrentInteriorRoom;
+        if (DamageControl.IsRoomOnFire(currentRoom))
+        {
+            DamageControl.ExtinguishRoom(currentRoom);
+            BroadcastDamageControlStateServer();
+        }
+        else
+        {
+            if (DamageControl.TryRepairRoomSubsystem(currentRoom, Subsystems, ignoreCooldown))
+            {
+                Rpc(MethodName.SyncSubsystemsStateRpc, Subsystems.CurrentEngineHealth, Subsystems.CurrentWeaponsHealth, Subsystems.CurrentTurretHealth);
+                BroadcastDamageControlStateServer();
             }
         }
     }
@@ -785,7 +875,65 @@ public partial class Ship : CharacterBody2D
         {
             Subsystems.ApplySubsystemDamage(targetSubsystem, subsystemDamage);
             Rpc(MethodName.SyncSubsystemsStateRpc, Subsystems.CurrentEngineHealth, Subsystems.CurrentWeaponsHealth, Subsystems.CurrentTurretHealth);
+
+            if (subsystemDamage >= 20.0f)
+            {
+                InteriorRoomType hitRoom = ShipDamageControl.GetRoomForSubsystem(targetSubsystem);
+                if (hitRoom != InteriorRoomType.None)
+                {
+                    float currentHealth = targetSubsystem switch
+                    {
+                        ShipSubsystemType.Engines => Subsystems.CurrentEngineHealth,
+                        ShipSubsystemType.Weapons => Subsystems.CurrentWeaponsHealth,
+                        ShipSubsystemType.Turret => Subsystems.CurrentTurretHealth,
+                        _ => 0f
+                    };
+                    float maxHealth = targetSubsystem switch
+                    {
+                        ShipSubsystemType.Engines => Subsystems.MaxEngineHealth,
+                        ShipSubsystemType.Weapons => Subsystems.MaxWeaponsHealth,
+                        ShipSubsystemType.Turret => Subsystems.MaxTurretHealth,
+                        _ => 1f
+                    };
+
+                    if (currentHealth <= maxHealth * 0.75f || currentHealth <= 0.0f)
+                    {
+                        DamageControl.IgniteRoom(hitRoom, 45.0f);
+                        BroadcastDamageControlStateServer();
+                    }
+                }
+            }
         }
+    }
+
+    public void BroadcastDamageControlStateServer()
+    {
+        if (!Multiplayer.IsServer())
+        {
+            return;
+        }
+
+        Rpc(MethodName.SyncDamageControlStateRpc,
+            DamageControl.GetRoomFireIntensity(InteriorRoomType.Cockpit),
+            DamageControl.GetRoomFireIntensity(InteriorRoomType.CentralHub),
+            DamageControl.GetRoomFireIntensity(InteriorRoomType.EngineRoom),
+            DamageControl.GetRoomFireIntensity(InteriorRoomType.Cargo),
+            DamageControl.GetRoomFireIntensity(InteriorRoomType.Medical),
+            DamageControl.CurrentRepairSupplies);
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    public void SyncDamageControlStateRpc(
+        float cockpitFire,
+        float hubFire,
+        float engineFire,
+        float cargoFire,
+        float medicalFire,
+        float repairSupplies)
+    {
+        DamageControl.SetStateFromReplication(cockpitFire, hubFire, engineFire, cargoFire, medicalFire, repairSupplies);
+        UpdateOverlayText();
+        QueueRedraw();
     }
 
     public void ApplyHullDamageServer(float amount, int attackerShipId = 0)
@@ -871,6 +1019,11 @@ public partial class Ship : CharacterBody2D
 
         Turret ??= new ShipTurret { LocalMountOffset = new Vector2(-24.0f, 0.0f) };
         Interior ??= ShipInterior.CreateCorvetteInterior();
+        if (DamageControl == null)
+        {
+            DamageControl = new ShipDamageControl();
+            DamageControl.DamageControlStateChanged += OnDamageControlChanged;
+        }
 
         _collisionShape = new CollisionShape2D
         {
@@ -909,6 +1062,11 @@ public partial class Ship : CharacterBody2D
         if (Subsystems != null)
         {
             Subsystems.SubsystemsChanged -= OnSubsystemsChanged;
+        }
+
+        if (DamageControl != null)
+        {
+            DamageControl.DamageControlStateChanged -= OnDamageControlChanged;
         }
     }
 
@@ -1065,6 +1223,30 @@ public partial class Ship : CharacterBody2D
                 _weapons[i].StepCooldown(dt);
             }
 
+            bool discreteFireSpread = DamageControl.StepServer(
+                dt,
+                Interior,
+                Subsystems,
+                out bool subDamaged,
+                out bool subJustDisabled);
+            _damageControlSyncAccumulator += dt;
+
+            if (subDamaged)
+            {
+                _subsystemFireSyncAccumulator += dt;
+                if (subJustDisabled || _subsystemFireSyncAccumulator >= 0.25f)
+                {
+                    _subsystemFireSyncAccumulator = 0f;
+                    Rpc(MethodName.SyncSubsystemsStateRpc, Subsystems.CurrentEngineHealth, Subsystems.CurrentWeaponsHealth, Subsystems.CurrentTurretHealth);
+                }
+            }
+
+            if (discreteFireSpread || (DamageControl.IsAnyRoomOnFire && _damageControlSyncAccumulator >= 0.25f))
+            {
+                _damageControlSyncAccumulator = 0f;
+                BroadcastDamageControlStateServer();
+            }
+
             float rot = Rotation;
             Vector2 vel = Velocity;
             Movement.StepPhysics(_currentServerInput, Hull.IsDisabled, dt, ref rot, ref vel, Subsystems.EngineEfficiency);
@@ -1203,6 +1385,28 @@ public partial class Ship : CharacterBody2D
                 InteriorConsole? roomConsole = Interior.GetConsoleByType((InteriorConsoleType)(int)room.RoomType);
                 Color accentColor = roomConsole != null ? roomConsole.ConsoleColor.Darkened(0.25f) : new Color(0.38f, 0.45f, 0.55f, 0.9f);
                 DrawRect(room.Bounds, accentColor, false, 2.0f);
+
+                // Milestone 4: Room fire hazard overlay & flame circles
+                if (DamageControl != null && DamageControl.IsRoomOnFire(room.RoomType))
+                {
+                    float fireFrac = Mathf.Clamp(DamageControl.GetRoomFireIntensity(room.RoomType) / 100.0f, 0.15f, 1.0f);
+                    float interiorAlpha = 1.0f - ExteriorRoofAlpha;
+                    Color fireOverlay = new Color(1.0f, 0.30f, 0.08f, 0.38f * fireFrac * interiorAlpha);
+                    DrawRect(room.Bounds, fireOverlay, true);
+
+                    Vector2 center = room.Bounds.GetCenter();
+                    float flameRadius = 8.0f + 4.0f * fireFrac;
+                    Vector2 f1 = center + new Vector2(-18.0f, 0.0f);
+                    Vector2 f2 = center;
+                    Vector2 f3 = center + new Vector2(18.0f, 0.0f);
+
+                    DrawCircle(f1, flameRadius, new Color(1.0f, 0.25f, 0.05f, 0.85f * interiorAlpha));
+                    DrawCircle(f1, flameRadius * 0.55f, new Color(1.0f, 0.85f, 0.2f, 0.95f * interiorAlpha));
+                    DrawCircle(f2, flameRadius * 1.25f, new Color(1.0f, 0.25f, 0.05f, 0.85f * interiorAlpha));
+                    DrawCircle(f2, flameRadius * 0.65f, new Color(1.0f, 0.85f, 0.2f, 0.95f * interiorAlpha));
+                    DrawCircle(f3, flameRadius, new Color(1.0f, 0.25f, 0.05f, 0.85f * interiorAlpha));
+                    DrawCircle(f3, flameRadius * 0.55f, new Color(1.0f, 0.85f, 0.2f, 0.95f * interiorAlpha));
+                }
             }
 
             // Interior Doors
@@ -1258,6 +1462,18 @@ public partial class Ship : CharacterBody2D
                 Vector2 p2 = BodyPolygon[(i + 1) % BodyPolygon.Length];
                 DrawLine(p1, p2, coverOutlineColor, 1.8f);
             }
+
+            // Milestone 4: Exterior fire warning border glow
+            if (DamageControl != null && DamageControl.IsAnyRoomOnFire)
+            {
+                Color fireGlowColor = new Color(1.0f, 0.35f, 0.05f, 0.45f * ExteriorRoofAlpha);
+                for (int i = 0; i < BodyPolygon.Length; i++)
+                {
+                    Vector2 p1 = BodyPolygon[i];
+                    Vector2 p2 = BodyPolygon[(i + 1) % BodyPolygon.Length];
+                    DrawLine(p1, p2, fireGlowColor, 4.0f);
+                }
+            }
         }
 
         // Forward weapon cannon barrel at the bow nose tip
@@ -1312,6 +1528,10 @@ public partial class Ship : CharacterBody2D
         }
 
         string status = Hull.IsDisabled ? " [DISABLED]" : string.Empty;
+        if (DamageControl != null && DamageControl.IsAnyRoomOnFire)
+        {
+            status += " [FIRE!]";
+        }
         string ammoInfo = PrimaryWeapon.IsReloading ? "RELOAD" : $"{PrimaryWeapon.CurrentAmmo}/{PrimaryWeapon.MaxAmmo}";
         string turretInfo = Turret.IsManuallyOperated ? $"[Gunner:{Turret.GunnerPeerId}]" : "[AutoTurret]";
         _infoLabel.Text = $"{ShipName} ({(int)Hull.CurrentHull}/{(int)Hull.MaxHull}){status}\n[{PrimaryWeapon.WeaponName}: {ammoInfo}] {turretInfo}";
@@ -1324,6 +1544,12 @@ public partial class Ship : CharacterBody2D
     }
 
     private void OnSubsystemsChanged()
+    {
+        UpdateOverlayText();
+        QueueRedraw();
+    }
+
+    private void OnDamageControlChanged()
     {
         UpdateOverlayText();
         QueueRedraw();

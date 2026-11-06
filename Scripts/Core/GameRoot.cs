@@ -94,6 +94,7 @@ public partial class GameRoot : Node2D
         bool runM1Test = false;
         bool runM2Test = false;
         bool runM3Test = false;
+        bool runM4Test = false;
         bool startHost = false;
         bool startServer = false;
         bool startClient = false;
@@ -121,6 +122,10 @@ public partial class GameRoot : Node2D
             else if (arg == "--test-m3")
             {
                 runM3Test = true;
+            }
+            else if (arg == "--test-m4")
+            {
+                runM4Test = true;
             }
             else if (arg == "--test-client")
             {
@@ -196,6 +201,14 @@ public partial class GameRoot : Node2D
         if (runM3Test)
         {
             var testRunner = new Milestone3AcceptanceTest { Name = "Milestone3AcceptanceTest" };
+            testRunner.Initialize(NetworkManager, MatchController, GameWorld);
+            AddChild(testRunner);
+            return;
+        }
+
+        if (runM4Test)
+        {
+            var testRunner = new Milestone4AcceptanceTest { Name = "Milestone4AcceptanceTest" };
             testRunner.Initialize(NetworkManager, MatchController, GameWorld);
             AddChild(testRunner);
             return;
