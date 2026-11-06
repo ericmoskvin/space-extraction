@@ -21,6 +21,7 @@
 
 ## Current Architecture & Project State
 - **Entry Scene:** `res://Scenes/Main.tscn` (`GameRoot.cs`).
+- **Godot Executable Note:** `E:/Users/Eric/Downloads/Godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe` lives outside the workspace root. Running it inside the terminal sandbox (`BypassSandbox: false`) blocks access to its sibling `GodotSharp/Api/Debug` directory and triggers a blocking Windows modal alert popup (`.NET assemblies not found`) even in `--headless` mode. Always run the Godot executable with `BypassSandbox: true` (while keeping `dotnet build` sandboxed).
 - **Core Modules:**
   - `SpaceExtraction.Networking.NetworkManager`: ENet session lifecycle & `PlayerIdentity` registry.
   - `SpaceExtraction.Match.MatchController`: Authoritative match phase, player/ship spawning, enemy target drone spawning, and late-joiner replication.
