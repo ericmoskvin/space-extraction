@@ -1,0 +1,41 @@
+using Godot;
+
+namespace SpaceExtraction.Characters;
+
+/// <summary>
+/// Defines where a player currently resides within the shared simulation.
+/// Follows Section 31 of GAME_DESIGN.md: Players are not tightly coupled to ships;
+/// they track their current location/occupancy so they can transition between ships and space.
+/// </summary>
+public enum PlayerLocationMode
+{
+    WorldSpace = 0,
+    ShipInterior = 1
+}
+
+/// <summary>
+/// Tracks a player's current occupancy context (e.g., open space vs. aboard a specific ship).
+/// </summary>
+public struct PlayerLocationContext
+{
+    public PlayerLocationMode Mode { get; set; }
+    public NodePath OccupiedShipPath { get; set; }
+
+    public static PlayerLocationContext CreateWorldSpace()
+    {
+        return new PlayerLocationContext
+        {
+            Mode = PlayerLocationMode.WorldSpace,
+            OccupiedShipPath = new NodePath()
+        };
+    }
+
+    public static PlayerLocationContext CreateShipInterior(NodePath shipPath)
+    {
+        return new PlayerLocationContext
+        {
+            Mode = PlayerLocationMode.ShipInterior,
+            OccupiedShipPath = shipPath
+        };
+    }
+}
