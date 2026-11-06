@@ -12,6 +12,9 @@ public struct ShipControlInput
     public bool Brake { get; set; }
     public bool Boost { get; set; }
     public bool FirePrimary { get; set; }
+    public bool ReloadRequested { get; set; }
+    public int SelectedWeaponSlot { get; set; }
+    public ShipSubsystemType TargetSubsystem { get; set; }
     public uint Tick { get; set; }
 
     public ShipControlInput Sanitized()
@@ -29,13 +32,53 @@ public struct ShipControlInput
             turn = 0.0f;
         }
 
+        int weaponSlot = SelectedWeaponSlot is >= 0 and <= 2 ? SelectedWeaponSlot : -1;
+        ShipSubsystemType subsystem = TargetSubsystem is ShipSubsystemType.Engines or ShipSubsystemType.Weapons or ShipSubsystemType.Turret
+            ? TargetSubsystem
+            : ShipSubsystemType.Engines;
+
         return new ShipControlInput
         {
             Throttle = throttle,
             Turn = turn,
-            Brake = Brake,
+            Brake = brakeOrDefault(Brake),
             Boost = Boost,
             FirePrimary = FirePrimary,
+            ReloadRequested = ReloadRequested,
+            SelectedWeaponSlot = weaponSlot,
+            TargetSubsystem = subsystem,
+            Tick = Tick
+        };
+
+        static bool brakeOrDefault(bool b) => b;
+    }
+}
+
+/// <summary>
+/// Represents a single tick of manual turret operator input sent to the authoritative server.
+/// </summary>
+public struct TurretControlInput
+{
+    public float AimAngleRadians { get; set; }
+    public bool FireTurret { get; set; }
+    public ShipSubsystemType TargetSubsystem { get; set; }
+    public uint Tick { get; set; }
+
+    public TurretControlInput Sanitized()
+    {
+        float angle = float.IsFinite(AimAngleRadians)
+            ? Mathf.Wrap(AimAngleRadians, -Mathf.Pi, Mathf.Pi)
+            : 0.0f;
+
+        ShipSubsystemType subsystem = TargetSubsystem is ShipSubsystemType.Engines or ShipSubsystemType.Weapons or ShipSubsystemType.Turret
+            ? TargetSubsystem
+            : ShipSubsystemType.Engines;
+
+        return new TurretControlInput
+        {
+            AimAngleRadians = angle,
+            FireTurret = FireTurret,
+            TargetSubsystem = subsystem,
             Tick = Tick
         };
     }

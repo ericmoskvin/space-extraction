@@ -5,8 +5,9 @@ using SpaceExtraction.World;
 namespace SpaceExtraction.Ships;
 
 /// <summary>
-/// Server-authoritative projectile fired by ship weaponry (Milestone 1).
-/// Performs continuous collision checks against target ships on the server.
+/// Server-authoritative projectile fired by ship weaponry (Milestones 1 & 2).
+/// Performs continuous collision checks against target ships on the server,
+/// applying both structural hull damage and targeted subsystem damage.
 /// </summary>
 public partial class ShipProjectile : Node2D
 {
@@ -16,6 +17,8 @@ public partial class ShipProjectile : Node2D
     public Vector2 Direction { get; private set; } = Vector2.Right;
     public float Speed { get; private set; } = 950.0f;
     public float Damage { get; private set; } = 40.0f;
+    public float SubsystemDamage { get; private set; } = 15.0f;
+    public ShipSubsystemType TargetSubsystem { get; private set; } = ShipSubsystemType.Engines;
     public float RemainingLifetime { get; private set; } = 1.8f;
     public Color BoltColor { get; private set; } = new Color(1.0f, 0.85f, 0.25f);
 
@@ -31,7 +34,9 @@ public partial class ShipProjectile : Node2D
         float speed,
         float damage,
         float lifetime,
-        Color boltColor)
+        Color boltColor,
+        float subsystemDamage = 15.0f,
+        ShipSubsystemType targetSubsystem = ShipSubsystemType.Engines)
     {
         Name = $"Projectile_{projectileId}";
         _gameWorld = gameWorld;
@@ -41,6 +46,8 @@ public partial class ShipProjectile : Node2D
         Direction = direction.LengthSquared() > 0.0001f ? direction.Normalized() : Vector2.Right;
         Speed = speed;
         Damage = damage;
+        SubsystemDamage = subsystemDamage;
+        TargetSubsystem = targetSubsystem;
         RemainingLifetime = lifetime;
         BoltColor = boltColor;
 
@@ -83,9 +90,13 @@ public partial class ShipProjectile : Node2D
 
                 Vector2 closest = Geometry2D.GetClosestPointToSegment(ship.GlobalPosition, prevPos, nextPos);
                 float collisionRadius = (ship.MovementProfile?.CollisionRadius ?? 28.0f) + 4.0f;
-                if (closest.DistanceTo(ship.GlobalPosition) <= collisionRadius)
+                float radiusSq = collisionRadius * collisionRadius;
+                float distSq = closest.DistanceSquaredTo(ship.GlobalPosition);
+                if (distSq <= radiusSq)
                 {
-                    ship.ApplyHullDamageServer(Damage, SourceShipId);
+                    float halfChord = Mathf.Sqrt(Mathf.Max(0.0f, radiusSq - distSq));
+                    Vector2 worldEntryPoint = closest - (Direction * halfChord);
+                    ship.ApplyPositionalCombatHitServer(worldEntryPoint, Damage, SubsystemDamage, SourceShipId);
                     _gameWorld.DespawnProjectileServer(ProjectileId);
                     return;
                 }

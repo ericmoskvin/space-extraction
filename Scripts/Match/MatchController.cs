@@ -180,6 +180,18 @@ public partial class MatchController : Node
                     existingShip.Hull.MaxHull,
                     existingShip.Hull.IsDisabled);
             }
+
+            if (existingShip.Subsystems != null)
+            {
+                existingShip.RpcId(identity.PeerId, Ship.MethodName.SyncSubsystemsStateRpc,
+                    existingShip.Subsystems.CurrentEngineHealth,
+                    existingShip.Subsystems.CurrentWeaponsHealth,
+                    existingShip.Subsystems.CurrentTurretHealth);
+            }
+
+            existingShip.RpcId(identity.PeerId, Ship.MethodName.SyncCrewRolesRpc,
+                existingShip.PilotPeerId,
+                existingShip.Turret.GunnerPeerId);
         }
 
         Vector2 spawnPos = CalculateSpawnPosition(identity.PeerId);

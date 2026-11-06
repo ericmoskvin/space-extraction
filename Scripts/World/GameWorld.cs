@@ -244,6 +244,34 @@ public partial class GameWorld : Node2D
         return list;
     }
 
+    public Ship? FindNearestEnemyShip(int sourceShipId, int sourceTeamId, Vector2 fromPosition, float maxRange)
+    {
+        EnsureContainers();
+        int count = GetShipCount();
+        Ship? nearest = null;
+        float nearestDistSq = maxRange * maxRange;
+
+        for (int i = 0; i < count; i++)
+        {
+            Ship? ship = GetShipAtIndex(i);
+            if (ship != null &&
+                ship.ShipId != sourceShipId &&
+                ship.OwnerTeamId != sourceTeamId &&
+                ship.Hull != null &&
+                !ship.Hull.IsDisabled)
+            {
+                float distSq = fromPosition.DistanceSquaredTo(ship.GlobalPosition);
+                if (distSq <= nearestDistSq)
+                {
+                    nearestDistSq = distSq;
+                    nearest = ship;
+                }
+            }
+        }
+
+        return nearest;
+    }
+
     public ShipProjectile? GetProjectile(int projectileId)
     {
         EnsureContainers();
@@ -266,7 +294,9 @@ public partial class GameWorld : Node2D
         float speed,
         float damage,
         float lifetime,
-        Color boltColor)
+        Color boltColor,
+        float subsystemDamage = 15.0f,
+        int targetSubsystemInt = (int)ShipSubsystemType.Engines)
     {
         if (!Multiplayer.IsServer())
         {
@@ -274,7 +304,7 @@ public partial class GameWorld : Node2D
         }
 
         int projId = _nextProjectileId++;
-        Rpc(MethodName.SpawnProjectileRpc, projId, sourceShipId, sourceTeamId, startPosition, direction, speed, damage, lifetime, boltColor);
+        Rpc(MethodName.SpawnProjectileRpc, projId, sourceShipId, sourceTeamId, startPosition, direction, speed, damage, lifetime, boltColor, subsystemDamage, targetSubsystemInt);
         return projId;
     }
 
@@ -298,7 +328,9 @@ public partial class GameWorld : Node2D
         float speed,
         float damage,
         float lifetime,
-        Color boltColor)
+        Color boltColor,
+        float subsystemDamage = 15.0f,
+        int targetSubsystemInt = (int)ShipSubsystemType.Engines)
     {
         if (GetProjectile(projectileId) != null)
         {
@@ -306,7 +338,7 @@ public partial class GameWorld : Node2D
         }
 
         var proj = new ShipProjectile();
-        proj.Initialize(this, projectileId, sourceShipId, sourceTeamId, startPosition, direction, speed, damage, lifetime, boltColor);
+        proj.Initialize(this, projectileId, sourceShipId, sourceTeamId, startPosition, direction, speed, damage, lifetime, boltColor, subsystemDamage, (ShipSubsystemType)targetSubsystemInt);
         ProjectilesContainer.AddChild(proj);
     }
 

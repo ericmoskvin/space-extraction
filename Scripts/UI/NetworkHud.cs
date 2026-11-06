@@ -81,7 +81,7 @@ public partial class NetworkHud : CanvasLayer
 
         var titleLabel = new Label
         {
-            Text = "2D SPACE EXTRACTION — MILESTONE 1",
+            Text = "2D SPACE EXTRACTION — MILESTONE 2",
             HorizontalAlignment = HorizontalAlignment.Center
         };
         rootVBox.AddChild(titleLabel);
@@ -160,7 +160,7 @@ public partial class NetworkHud : CanvasLayer
 
         var controlsHint = new Label
         {
-            Text = "W/S: Thrust | A/D: Turn | X/C: Brake | Shift: Boost | Space/Click: Fire",
+            Text = "W/S: Thrust | A/D: Turn | X/C: Brake | Shift: Boost | Space/Click: Fire | 1/2/3: Weapon | R: Reload | T: Turret/Pilot",
             Modulate = new Color(0.75f, 0.85f, 1.0f),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
@@ -278,7 +278,8 @@ public partial class NetworkHud : CanvasLayer
             $"Match Phase: {_matchController.CurrentPhase} | Time: {_matchController.ElapsedMatchTime:F1}s\n" +
             $"Players: {_networkManager.Players.Count} | Active Ships: {ships.Count}";
 
-        Ship? localShip = _gameWorld.GetShipByPilot(_networkManager.LocalPeerId);
+        Ship? localShip = _gameWorld.GetShipByPilot(_networkManager.LocalPeerId)
+            ?? _gameWorld.GetShip((int)_networkManager.LocalPeerId);
         if (localShip != null)
         {
             string boostState = localShip.Movement.IsBoosting
@@ -287,9 +288,19 @@ public partial class NetworkHud : CanvasLayer
                     ? $"CD {localShip.Movement.BoostCooldownRemaining:F1}s"
                     : "READY");
             string statusState = localShip.Hull.IsDisabled ? "DISABLED" : "OPERATIONAL";
+            ShipWeapon wpn = localShip.PrimaryWeapon;
+            string ammoState = wpn.IsReloading
+                ? $"RELOADING ({wpn.ReloadTimeRemaining:F1}s)"
+                : $"{wpn.CurrentAmmo}/{wpn.MaxAmmo}";
+            string turretState = localShip.Turret.IsManuallyOperated
+                ? $"MANUAL (Peer {localShip.Turret.GunnerPeerId})"
+                : "AUTO";
+
             _localShipLabel.Text =
                 $"Ship: {localShip.ShipName} [{localShip.ShipClass}] ({statusState})\n" +
-                $"Hull: {localShip.Hull.CurrentHull:F0}/{localShip.Hull.MaxHull:F0} | Speed: {localShip.Velocity.Length():F0} u/s | Boost: {boostState}";
+                $"Hull: {localShip.Hull.CurrentHull:F0}/{localShip.Hull.MaxHull:F0} | Eng: {localShip.Subsystems.CurrentEngineHealth:F0} | Wpn: {localShip.Subsystems.CurrentWeaponsHealth:F0} | Tur: {localShip.Subsystems.CurrentTurretHealth:F0}\n" +
+                $"Weapon [{localShip.ActiveWeaponIndex + 1}]: {wpn.WeaponName} ({ammoState}) | Turret: {turretState}\n" +
+                $"Speed: {localShip.Velocity.Length():F0} u/s | Boost: {boostState}";
             _localShipLabel.Visible = true;
         }
         else
@@ -302,9 +313,9 @@ public partial class NetworkHud : CanvasLayer
         for (int i = 0; i < ships.Count; i++)
         {
             Ship ship = ships[i];
-            string stateTag = ship.Hull.IsDisabled ? " [DISABLED]" : "";
+            string stateTag = ship.Hull.IsDisabled ? " [DISABLED]" : (ship.Subsystems.IsEnginesDisabled ? " [ENG OUT]" : "");
             _hudStringBuilder.AppendLine(
-                $"• [{ship.ShipId}] {ship.ShipName} Hull:{ship.Hull.CurrentHull:F0}/{ship.Hull.MaxHull:F0}{stateTag} Pos:({ship.GlobalPosition.X:F0},{ship.GlobalPosition.Y:F0})");
+                $"• [{ship.ShipId}] {ship.ShipName} Hull:{ship.Hull.CurrentHull:F0}/{ship.Hull.MaxHull:F0} Eng:{ship.Subsystems.CurrentEngineHealth:F0}{stateTag}");
         }
 
         _playersListLabel.Text = _hudStringBuilder.ToString().TrimEnd();

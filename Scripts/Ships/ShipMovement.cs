@@ -3,8 +3,9 @@ using Godot;
 namespace SpaceExtraction.Ships;
 
 /// <summary>
-/// Server-authoritative ship flight dynamics (Section 8 & Milestone 1).
-/// Computes rotation, forward/reverse thrust, active braking, and temporary boost.
+/// Server-authoritative ship flight dynamics (Section 8, Section 11 & Milestones 1–2).
+/// Computes rotation, forward/reverse thrust, active braking, temporary boost,
+/// and engine subsystem damage penalties (reduced acceleration/top speed or immobilization).
 /// </summary>
 public sealed class ShipMovement
 {
@@ -20,14 +21,15 @@ public sealed class ShipMovement
 
     /// <summary>
     /// Steps the ship's rotation and linear velocity for a single physics frame.
-    /// When disabled, the ship cannot rotate, thrust, or boost, and slowly decelerates via passive drag.
+    /// Engine efficiency in [0, 1] scales thrust acceleration and top speed; 0 immobilizes thrust/boost.
     /// </summary>
     public void StepPhysics(
         ShipControlInput rawInput,
         bool isDisabled,
         float delta,
         ref float rotationRadians,
-        ref Vector2 velocity)
+        ref Vector2 velocity,
+        float engineEfficiency = 1.0f)
     {
         if (delta <= 0.0f)
         {
@@ -35,6 +37,7 @@ public sealed class ShipMovement
         }
 
         ShipControlInput input = rawInput.Sanitized();
+        float clampedEngineEfficiency = Mathf.Clamp(engineEfficiency, 0.0f, 1.0f);
 
         // Update boost timers
         if (BoostTimeRemaining > 0.0f)
@@ -51,7 +54,7 @@ public sealed class ShipMovement
             BoostCooldownRemaining = Mathf.Max(0.0f, BoostCooldownRemaining - delta);
         }
 
-        if (isDisabled)
+        if (isDisabled || clampedEngineEfficiency <= 0.0f)
         {
             IsBoosting = false;
             BoostTimeRemaining = 0.0f;
@@ -70,20 +73,20 @@ public sealed class ShipMovement
         // Rotation / turning
         if (Mathf.Abs(input.Turn) > 0.001f)
         {
+            float turnEfficiency = Mathf.Lerp(0.5f, 1.0f, clampedEngineEfficiency);
             rotationRadians = Mathf.Wrap(
-                rotationRadians + input.Turn * Profile.TurnSpeedRadians * delta,
+                rotationRadians + input.Turn * Profile.TurnSpeedRadians * turnEfficiency * delta,
                 -Mathf.Pi,
                 Mathf.Pi);
         }
 
         Vector2 forward = Vector2.Right.Rotated(rotationRadians);
-        float effectiveMaxSpeed = Profile.MaxSpeed * (IsBoosting ? Profile.BoostSpeedMultiplier : 1.0f);
+        float effectiveMaxSpeed = Profile.MaxSpeed * clampedEngineEfficiency * (IsBoosting ? Profile.BoostSpeedMultiplier : 1.0f);
 
-        // Active braking takes priority when Brake is held and no forward/reverse throttle is applied,
-        // or when Brake is explicitly held to shed speed rapidly.
+        // Active braking
         if (input.Brake && !IsBoosting)
         {
-            velocity = velocity.MoveToward(Vector2.Zero, Profile.BrakingDeceleration * delta);
+            velocity = velocity.MoveToward(Vector2.Zero, Profile.BrakingDeceleration * clampedEngineEfficiency * delta);
             return;
         }
 
@@ -96,9 +99,9 @@ public sealed class ShipMovement
 
         if (Mathf.Abs(effectiveThrottle) > 0.001f)
         {
-            float accel = effectiveThrottle > 0.0f
+            float accel = (effectiveThrottle > 0.0f
                 ? Profile.ForwardAcceleration * (IsBoosting ? Profile.BoostAccelerationMultiplier : 1.0f)
-                : Profile.ReverseAcceleration;
+                : Profile.ReverseAcceleration) * clampedEngineEfficiency;
 
             velocity += forward * (effectiveThrottle * accel * delta);
 
