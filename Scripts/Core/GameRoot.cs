@@ -14,7 +14,7 @@ namespace SpaceExtraction.Core;
 /// Wires together NetworkManager, MatchController, GameWorld, and NetworkHud,
 /// and supports CLI arguments for multi-instance testing and automated acceptance tests.
 /// </summary>
-public partial class GameRoot : Node
+public partial class GameRoot : Node2D
 {
     public NetworkManager NetworkManager { get; private set; } = null!;
     public MatchController MatchController { get; private set; } = null!;
