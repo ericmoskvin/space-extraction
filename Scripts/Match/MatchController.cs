@@ -124,7 +124,7 @@ public partial class MatchController : Node
                 0L,
                 true,
                 new Color(1.0f, 0.35f, 0.3f),
-                new Vector2(260f, 0f),
+                new Vector2(480f, 0f),
                 Mathf.Pi);
         }
     }
@@ -192,6 +192,25 @@ public partial class MatchController : Node
             existingShip.RpcId(identity.PeerId, Ship.MethodName.SyncCrewRolesRpc,
                 existingShip.PilotPeerId,
                 existingShip.Turret.GunnerPeerId);
+
+            if (existingShip.Interior != null)
+            {
+                existingShip.RpcId(identity.PeerId, Ship.MethodName.SyncDoorsStateRpc,
+                    existingShip.Interior.GetDoorsBitmask());
+            }
+        }
+
+        // Sync full ship interior occupancy and local position for all existing characters to the joining client
+        foreach (PlayerCharacter existingChar in _gameWorld.GetAllPlayerCharacters())
+        {
+            if (existingChar.PeerId != identity.PeerId && existingChar.LocationContext.Mode == PlayerLocationMode.ShipInterior)
+            {
+                existingChar.RpcId(identity.PeerId, PlayerCharacter.MethodName.SyncShipOccupancyRpc,
+                    existingChar.LocationContext.OccupiedShipId,
+                    existingChar.LocationContext.IsPiloting,
+                    existingChar.LocationContext.IsOperatingTurret,
+                    existingChar.ShipLocalPosition);
+            }
         }
 
         Vector2 spawnPos = CalculateSpawnPosition(identity.PeerId);

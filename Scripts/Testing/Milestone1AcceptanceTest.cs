@@ -178,7 +178,7 @@ public partial class Milestone1AcceptanceTest : Node
                     GD.Print($"[Milestone 1 Acceptance Test] Step 2 PASSED: Active braking decelerated ship from {_peakSpeedBeforeBrake:F0} u/s to {_hostShip.Velocity.Length():F0} u/s.");
 
                     // Position Host ship facing the Enemy Target Ship at close-medium range to test weapons, damage, and disabling
-                    _hostShip.GlobalPosition = _targetShip!.GlobalPosition + new Vector2(-180.0f, 0.0f);
+                    _hostShip.GlobalPosition = _targetShip!.GlobalPosition + new Vector2(-320.0f, 0.0f);
                     _hostShip.Rotation = 0.0f;
                     _hostShip.Velocity = Vector2.Zero;
 

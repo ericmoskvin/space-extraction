@@ -81,7 +81,7 @@ public partial class NetworkHud : CanvasLayer
 
         var titleLabel = new Label
         {
-            Text = "2D SPACE EXTRACTION — MILESTONE 2",
+            Text = "2D SPACE EXTRACTION — MILESTONE 3",
             HorizontalAlignment = HorizontalAlignment.Center
         };
         rootVBox.AddChild(titleLabel);
@@ -158,9 +158,50 @@ public partial class NetworkHud : CanvasLayer
         _playersListLabel = new Label();
         _sessionBox.AddChild(_playersListLabel);
 
+        var legendHeader = new Label
+        {
+            Text = "SHIP ROOMS & SYSTEMS LEGEND:",
+            Modulate = new Color(0.85f, 0.88f, 0.95f)
+        };
+        _sessionBox.AddChild(legendHeader);
+
+        static HBoxContainer CreateLegendRow(Color swatchColor, string text)
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 6);
+            var rect = new ColorRect
+            {
+                Color = swatchColor,
+                CustomMinimumSize = new Vector2(14f, 14f)
+            };
+            row.AddChild(rect);
+            var label = new Label
+            {
+                Text = text,
+                Modulate = new Color(0.85f, 0.9f, 0.95f)
+            };
+            row.AddChild(label);
+            return row;
+        }
+
+        _sessionBox.AddChild(CreateLegendRow(new Color(0.20f, 0.85f, 1.0f), "Cockpit / Pilot & Weapons (Bow)"));
+        _sessionBox.AddChild(CreateLegendRow(new Color(1.0f, 0.65f, 0.20f), "Central Hub / Dorsal Turret (Midships)"));
+        _sessionBox.AddChild(CreateLegendRow(new Color(1.0f, 0.45f, 0.20f), "Engine Room / Engineering (Stern)"));
+        _sessionBox.AddChild(CreateLegendRow(new Color(0.95f, 0.85f, 0.25f), "Cargo Bay / Cargo Console (Port)"));
+        _sessionBox.AddChild(CreateLegendRow(new Color(0.25f, 0.95f, 0.55f), "Medbay / Medical Console (Starboard)"));
+
+        var doorRow = new HBoxContainer();
+        doorRow.AddThemeConstantOverride("separation", 6);
+        var openSwatch = new ColorRect { Color = new Color(0.25f, 0.95f, 0.45f), CustomMinimumSize = new Vector2(14f, 14f) };
+        var closedSwatch = new ColorRect { Color = new Color(0.95f, 0.30f, 0.20f), CustomMinimumSize = new Vector2(14f, 14f) };
+        doorRow.AddChild(openSwatch);
+        doorRow.AddChild(closedSwatch);
+        doorRow.AddChild(new Label { Text = "Bulkhead Doors: Green = Open, Red = Closed [F]", Modulate = new Color(0.85f, 0.9f, 0.95f) });
+        _sessionBox.AddChild(doorRow);
+
         var controlsHint = new Label
         {
-            Text = "W/S: Thrust | A/D: Turn | X/C: Brake | Shift: Boost | Space/Click: Fire | 1/2/3: Weapon | R: Reload | T: Turret/Pilot",
+            Text = "WASD: Fly/Walk | E: Use/Leave Console | F: Door | Space/Click: Fire | 1/2/3: Wpn | R: Reload | T: Swap Pilot/Turret | Scroll: Zoom",
             Modulate = new Color(0.75f, 0.85f, 1.0f),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
@@ -278,8 +319,11 @@ public partial class NetworkHud : CanvasLayer
             $"Match Phase: {_matchController.CurrentPhase} | Time: {_matchController.ElapsedMatchTime:F1}s\n" +
             $"Players: {_networkManager.Players.Count} | Active Ships: {ships.Count}";
 
-        Ship? localShip = _gameWorld.GetShipByPilot(_networkManager.LocalPeerId)
-            ?? _gameWorld.GetShip((int)_networkManager.LocalPeerId);
+        PlayerCharacter? localChar = _gameWorld.GetPlayerCharacter(_networkManager.LocalPeerId);
+        Ship? localShip = (localChar != null && localChar.LocationContext.OccupiedShipId > 0)
+            ? _gameWorld.GetShip(localChar.LocationContext.OccupiedShipId)
+            : (_gameWorld.GetShipByPilot(_networkManager.LocalPeerId) ?? _gameWorld.GetShip((int)_networkManager.LocalPeerId));
+
         if (localShip != null)
         {
             string boostState = localShip.Movement.IsBoosting
@@ -296,11 +340,47 @@ public partial class NetworkHud : CanvasLayer
                 ? $"MANUAL (Peer {localShip.Turret.GunnerPeerId})"
                 : "AUTO";
 
+            string interiorLine = string.Empty;
+            if (localChar != null && localChar.LocationContext.Mode == PlayerLocationMode.ShipInterior)
+            {
+                string role;
+                string prompt = string.Empty;
+                if (localChar.LocationContext.IsPiloting)
+                {
+                    role = "PILOTING";
+                    prompt = " | [E] Leave Station";
+                }
+                else if (localChar.LocationContext.IsOperatingTurret)
+                {
+                    role = "TURRET GUNNER";
+                    prompt = " | [E] Leave Station";
+                }
+                else
+                {
+                    role = "ON FOOT";
+                    var nearbyConsole = localShip.Interior.FindNearestInteractableConsole(localChar.ShipLocalPosition);
+                    if (nearbyConsole != null)
+                    {
+                        prompt = $" | [E] Use {nearbyConsole.ConsoleName}";
+                    }
+                    else
+                    {
+                        var nearbyDoor = localShip.Interior.FindNearestInteractableDoor(localChar.ShipLocalPosition);
+                        if (nearbyDoor != null)
+                        {
+                            prompt = $" | [F] {(nearbyDoor.IsOpen ? "Close" : "Open")} {nearbyDoor.DoorName}";
+                        }
+                    }
+                }
+                interiorLine = $"\nStatus: {role} in {localChar.CurrentInteriorRoom}{prompt}";
+            }
+
             _localShipLabel.Text =
                 $"Ship: {localShip.ShipName} [{localShip.ShipClass}] ({statusState})\n" +
                 $"Hull: {localShip.Hull.CurrentHull:F0}/{localShip.Hull.MaxHull:F0} | Eng: {localShip.Subsystems.CurrentEngineHealth:F0} | Wpn: {localShip.Subsystems.CurrentWeaponsHealth:F0} | Tur: {localShip.Subsystems.CurrentTurretHealth:F0}\n" +
                 $"Weapon [{localShip.ActiveWeaponIndex + 1}]: {wpn.WeaponName} ({ammoState}) | Turret: {turretState}\n" +
-                $"Speed: {localShip.Velocity.Length():F0} u/s | Boost: {boostState}";
+                $"Speed: {localShip.Velocity.Length():F0} u/s | Boost: {boostState}" +
+                interiorLine;
             _localShipLabel.Visible = true;
         }
         else

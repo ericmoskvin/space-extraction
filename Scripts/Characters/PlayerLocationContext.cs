@@ -21,7 +21,10 @@ public struct PlayerLocationContext
     public PlayerLocationMode Mode { get; set; }
     public int OccupiedShipId { get; set; }
     public bool IsPiloting { get; set; }
+    public bool IsOperatingTurret { get; set; }
     public NodePath OccupiedShipPath { get; set; }
+
+    public bool IsOnFootInShip => Mode == PlayerLocationMode.ShipInterior && !IsPiloting && !IsOperatingTurret;
 
     public static PlayerLocationContext CreateWorldSpace()
     {
@@ -30,17 +33,19 @@ public struct PlayerLocationContext
             Mode = PlayerLocationMode.WorldSpace,
             OccupiedShipId = 0,
             IsPiloting = false,
+            IsOperatingTurret = false,
             OccupiedShipPath = new NodePath()
         };
     }
 
-    public static PlayerLocationContext CreateShipOccupancy(int shipId, bool isPiloting, NodePath shipPath)
+    public static PlayerLocationContext CreateShipOccupancy(int shipId, bool isPiloting, NodePath shipPath, bool isOperatingTurret = false)
     {
         return new PlayerLocationContext
         {
             Mode = PlayerLocationMode.ShipInterior,
             OccupiedShipId = shipId,
             IsPiloting = isPiloting,
+            IsOperatingTurret = isOperatingTurret,
             OccupiedShipPath = shipPath
         };
     }

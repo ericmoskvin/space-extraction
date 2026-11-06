@@ -17,7 +17,7 @@ public sealed class ShipTurret
     public const float AutoCooldownMultiplier = 1.65f;
     public const float ManualCooldownMultiplier = 0.75f;
 
-    public Vector2 LocalMountOffset { get; init; } = new Vector2(-4.0f, 0.0f);
+    public Vector2 LocalMountOffset { get; init; } = new Vector2(-24.0f, 0.0f);
     public ShipWeapon Weapon { get; } = ShipWeapon.CreateTurretCannon();
 
     public long GunnerPeerId { get; private set; }

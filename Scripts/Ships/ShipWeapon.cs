@@ -27,7 +27,7 @@ public sealed class ShipWeapon
     public int MaxAmmo { get; init; } = 20;
     public float ReloadDuration { get; init; } = 1.4f;
     public Color BoltColor { get; init; } = new Color(1.0f, 0.85f, 0.25f);
-    public Vector2 LocalMuzzleOffset { get; init; } = new Vector2(34.0f, 0.0f);
+    public Vector2 LocalMuzzleOffset { get; init; } = new Vector2(198.0f, 0.0f);
 
     public int CurrentAmmo { get; private set; }
     public bool IsReloading { get; private set; }
@@ -58,7 +58,7 @@ public sealed class ShipWeapon
             ProjectileLifetime = 1.6f,
             ReloadDuration = 1.4f,
             BoltColor = new Color(1.0f, 0.85f, 0.25f),
-            LocalMuzzleOffset = new Vector2(34.0f, 0.0f)
+            LocalMuzzleOffset = new Vector2(198.0f, 0.0f)
         };
     }
 
@@ -78,7 +78,7 @@ public sealed class ShipWeapon
             ProjectileLifetime = 1.5f,
             ReloadDuration = 2.0f,
             BoltColor = new Color(0.45f, 0.95f, 1.0f),
-            LocalMuzzleOffset = new Vector2(36.0f, 0.0f)
+            LocalMuzzleOffset = new Vector2(198.0f, 0.0f)
         };
     }
 
@@ -99,7 +99,7 @@ public sealed class ShipWeapon
             ProjectileLifetime = 1.6f,
             ReloadDuration = 1.7f,
             BoltColor = new Color(0.65f, 0.35f, 1.0f),
-            LocalMuzzleOffset = new Vector2(34.0f, 0.0f)
+            LocalMuzzleOffset = new Vector2(198.0f, 0.0f)
         };
     }
 
@@ -119,7 +119,7 @@ public sealed class ShipWeapon
             ProjectileLifetime = 1.4f,
             ReloadDuration = 1.5f,
             BoltColor = new Color(1.0f, 0.55f, 0.2f),
-            LocalMuzzleOffset = new Vector2(18.0f, 0.0f)
+            LocalMuzzleOffset = new Vector2(28.0f, 0.0f)
         };
     }
 

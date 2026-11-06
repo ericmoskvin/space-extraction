@@ -88,14 +88,8 @@ public partial class ShipProjectile : Node2D
                     continue;
                 }
 
-                Vector2 closest = Geometry2D.GetClosestPointToSegment(ship.GlobalPosition, prevPos, nextPos);
-                float collisionRadius = (ship.MovementProfile?.CollisionRadius ?? 28.0f) + 4.0f;
-                float radiusSq = collisionRadius * collisionRadius;
-                float distSq = closest.DistanceSquaredTo(ship.GlobalPosition);
-                if (distSq <= radiusSq)
+                if (ship.TryIntersectProjectileSegment(prevPos, nextPos, out Vector2 worldEntryPoint))
                 {
-                    float halfChord = Mathf.Sqrt(Mathf.Max(0.0f, radiusSq - distSq));
-                    Vector2 worldEntryPoint = closest - (Direction * halfChord);
                     ship.ApplyPositionalCombatHitServer(worldEntryPoint, Damage, SubsystemDamage, SourceShipId);
                     _gameWorld.DespawnProjectileServer(ProjectileId);
                     return;
@@ -111,8 +105,8 @@ public partial class ShipProjectile : Node2D
 
     public override void _Draw()
     {
-        // Bright energy bolt along local X axis
-        DrawLine(new Vector2(-14.0f, 0.0f), new Vector2(6.0f, 0.0f), BoltColor, 3.0f);
-        DrawCircle(new Vector2(4.0f, 0.0f), 2.5f, Colors.White);
+        // Bright energy bolt along local X axis forward from muzzle tip
+        DrawLine(new Vector2(0.0f, 0.0f), new Vector2(18.0f, 0.0f), BoltColor, 3.0f);
+        DrawCircle(new Vector2(16.0f, 0.0f), 2.5f, Colors.White);
     }
 }
