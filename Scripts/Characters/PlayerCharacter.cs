@@ -1,11 +1,12 @@
 using Godot;
+using SpaceExtraction.Ships;
+using SpaceExtraction.World;
 
 namespace SpaceExtraction.Characters;
 
 /// <summary>
-/// Authoritative player character body for Milestone 0.
-/// Runs floating physics movement on the server, accepts validated client input,
-/// and replicates authoritative position/velocity to peers.
+/// Authoritative player character body.
+/// Supports both standalone floating movement (Milestone 0) and decoupled ship occupancy/piloting (Milestone 1+).
 /// </summary>
 public partial class PlayerCharacter : CharacterBody2D
 {
@@ -15,7 +16,7 @@ public partial class PlayerCharacter : CharacterBody2D
     public string DisplayName { get; private set; } = string.Empty;
     public int TeamId { get; private set; }
     public Color PlayerColor { get; private set; } = Colors.Cyan;
-    public PlayerLocationContext LocationContext { get; set; } = PlayerLocationContext.CreateWorldSpace();
+    public PlayerLocationContext LocationContext { get; private set; } = PlayerLocationContext.CreateWorldSpace();
     public uint LastProcessedInputTick { get; private set; }
 
     public Vector2 AuthoritativePosition => _authoritativePosition;
@@ -39,7 +40,7 @@ public partial class PlayerCharacter : CharacterBody2D
         TeamId = identity.TeamId;
         PlayerColor = identity.PlayerColor;
 
-        GlobalPosition = spawnPosition;
+        Position = spawnPosition;
         _authoritativePosition = spawnPosition;
         _authoritativeVelocity = Vector2.Zero;
 
@@ -51,11 +52,29 @@ public partial class PlayerCharacter : CharacterBody2D
             _nameLabel.Text = DisplayName;
         }
 
-        if (_camera != null)
+        RefreshOccupancyPresentation();
+        QueueRedraw();
+    }
+
+    public void SetShipOccupancy(int shipId, bool isPiloting, NodePath shipPath)
+    {
+        if (shipId > 0)
         {
-            _camera.Enabled = IsLocalPlayer();
+            LocationContext = PlayerLocationContext.CreateShipOccupancy(shipId, isPiloting, shipPath);
+        }
+        else
+        {
+            LocationContext = PlayerLocationContext.CreateWorldSpace();
         }
 
+        RefreshOccupancyPresentation();
+        QueueRedraw();
+    }
+
+    public void ClearShipOccupancy()
+    {
+        LocationContext = PlayerLocationContext.CreateWorldSpace();
+        RefreshOccupancyPresentation();
         QueueRedraw();
     }
 
@@ -101,26 +120,27 @@ public partial class PlayerCharacter : CharacterBody2D
 
         _camera = new Camera2D
         {
-            Enabled = IsLocalPlayer()
+            Enabled = IsLocalPlayer() && LocationContext.Mode == PlayerLocationMode.WorldSpace
         };
         AddChild(_camera);
 
+        RefreshOccupancyPresentation();
         QueueRedraw();
     }
 
     public override void _Draw()
     {
-        // Outer ship hull circle
-        DrawCircle(Vector2.Zero, 16.0f, PlayerColor);
+        if (LocationContext.Mode == PlayerLocationMode.ShipInterior)
+        {
+            // While aboard/piloting a ship in Milestone 1 (pre-interiors), the ship renders the exterior hull.
+            return;
+        }
 
-        // Inner cockpit
+        DrawCircle(Vector2.Zero, 16.0f, PlayerColor);
         DrawCircle(Vector2.Zero, 8.0f, new Color(0.08f, 0.1f, 0.14f, 1.0f));
 
-        // Heading indicator / nose
         Vector2 heading = Velocity.LengthSquared() > 1.0f ? Velocity.Normalized() : Vector2.Right;
         DrawLine(Vector2.Zero, heading * 22.0f, Colors.White, 3.0f);
-
-        // Outer rim
         DrawArc(Vector2.Zero, 16.0f, 0f, Mathf.Tau, 32, Colors.White, 1.5f);
     }
 
@@ -129,6 +149,21 @@ public partial class PlayerCharacter : CharacterBody2D
         if (!Multiplayer.HasMultiplayerPeer() || Multiplayer.MultiplayerPeer is OfflineMultiplayerPeer)
         {
             return;
+        }
+
+        // If occupying a ship in Milestone 1 (unless direct character test input override is active for M0 tests),
+        // track the occupied ship's world position so player identity and ship occupancy stay synchronized.
+        if (LocationContext.Mode == PlayerLocationMode.ShipInterior && _testInputOverride == null)
+        {
+            Ship? occupiedShip = FindOccupiedShip();
+            if (occupiedShip != null)
+            {
+                GlobalPosition = occupiedShip.GlobalPosition;
+                Velocity = occupiedShip.Velocity;
+                _authoritativePosition = GlobalPosition;
+                _authoritativeVelocity = Velocity;
+                return;
+            }
         }
 
         if (IsLocalPlayer())
@@ -157,7 +192,6 @@ public partial class PlayerCharacter : CharacterBody2D
         }
         else
         {
-            // Smooth extrapolation/interpolation toward authoritative server state
             float dist = GlobalPosition.DistanceTo(_authoritativePosition);
             if (dist > 120.0f)
             {
@@ -183,7 +217,6 @@ public partial class PlayerCharacter : CharacterBody2D
             return;
         }
 
-        // Anti-spoofing verification: ensure sender is the owner of this character
         if (senderPeerId != PeerId)
         {
             return;
@@ -220,6 +253,50 @@ public partial class PlayerCharacter : CharacterBody2D
                 _authoritativeVelocity = velocity;
                 LastProcessedInputTick = processedTick;
             }
+        }
+    }
+
+    private Ship? FindOccupiedShip()
+    {
+        if (LocationContext.OccupiedShipId <= 0)
+        {
+            return null;
+        }
+
+        if (!LocationContext.OccupiedShipPath.IsEmpty)
+        {
+            Ship? byPath = GetNodeOrNull<Ship>(LocationContext.OccupiedShipPath);
+            if (byPath != null)
+            {
+                return byPath;
+            }
+        }
+
+        if (GetParent()?.GetParent() is GameWorld world)
+        {
+            return world.GetShip(LocationContext.OccupiedShipId);
+        }
+
+        return null;
+    }
+
+    private void RefreshOccupancyPresentation()
+    {
+        bool inShip = LocationContext.Mode == PlayerLocationMode.ShipInterior;
+
+        if (_collisionShape != null)
+        {
+            _collisionShape.Disabled = inShip;
+        }
+
+        if (_nameLabel != null)
+        {
+            _nameLabel.Visible = !inShip;
+        }
+
+        if (_camera != null)
+        {
+            _camera.Enabled = IsLocalPlayer() && !inShip;
         }
     }
 

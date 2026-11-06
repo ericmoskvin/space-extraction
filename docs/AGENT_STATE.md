@@ -1,36 +1,38 @@
 # Agent State & Development Log
 
 ## Current Status
-- **Active Milestone:** Milestone 0 — Project Foundation (COMPLETED) → Ready for Milestone 1 — Basic Ship Gameplay
+- **Active Milestone:** Milestone 1 — Basic Ship Gameplay (COMPLETED) → Ready for Milestone 2 — Ship Combat Systems
 - **Last Updated:** 2026-11-06
 
 ## Completed Tasks
 - [x] Reviewed `docs/GAME_DESIGN.md` (Project Charter & MVP Specification) and `agents.md`.
 - [x] Initialized Git repository, configured `SpaceExtraction.csproj` (`Godot.NET.Sdk/4.7.2`, `net8.0`) & `SpaceExtraction.sln`, and linked remote `origin` (`https://github.com/ericmoskvin/space-extraction.git`).
 - [x] **Milestone 0 — Project Foundation:**
-  - Established modular project structure (`Scripts/Core`, `Scripts/Networking`, `Scripts/Match`, `Scripts/World`, `Scripts/Characters`, `Scripts/UI`, `Scripts/Testing`, `Scenes/Main.tscn`).
-  - Implemented ENet server/client/dedicated-server session management and player registration in `NetworkManager.cs`.
-  - Implemented server-authoritative match lifecycle (`WaitingForPlayers`, `InProgress`, `Ended`) and late-joiner state replication in `MatchController.cs`.
-  - Implemented decoupled `PlayerIdentity` and `PlayerLocationContext` (Section 31 compliance: players are not tightly coupled to ships).
-  - Implemented server-authoritative `PlayerCharacter` movement (`SetMultiplayerAuthority(1)`), anti-spoofing sender validation, input sanitization, and state synchronization.
-  - Implemented `GameWorld` container hierarchy (`SpaceEnvironment`, `ShipsContainer`, `PlayersContainer`) with visual space coordinate grid.
-  - Implemented `NetworkHud` for interactive Host/Client/Dedicated Server connections and live diagnostics.
-  - Built and executed automated multi-instance acceptance test (`Milestone0AcceptanceTest.cs` via `--test-m0`), verifying 3 concurrent peers connecting, spawning, rejecting spoofed input, and moving under server authority.
-  - Completed independent review via `flash-reviewer` and resolved all findings.
+  - Established modular project structure, ENet server/client session management (`NetworkManager`), match lifecycle (`MatchController`), decoupled `PlayerIdentity`/`PlayerLocationContext`, server-authoritative `PlayerCharacter` movement, `GameWorld`, `NetworkHud`, and `--test-m0` acceptance test.
+- [x] **Milestone 1 — Basic Ship Gameplay:**
+  - Implemented `ShipMovementProfile` (`Scout`, `Corvette` MVP reference ship, `Freighter`) and `ShipControlInput` with server-side sanitization.
+  - Implemented `ShipMovement` (2D rotation, forward/reverse thrust acceleration, active braking deceleration, passive space drag, temporary boost with duration and cooldown timers, and disabled ship immobilization).
+  - Implemented `ShipHull` (structural integrity tracking and transition to `DISABLED` when hull reaches 0, preserving the vessel for boarding/capture in later milestones).
+  - Implemented `ShipWeapon` (Autocannon fire rate cooldown & muzzle calculation) and `ShipProjectile` (continuous server-authoritative swept segment collision detection via `Geometry2D.GetClosestPointToSegment`).
+  - Implemented server-authoritative `Ship` entity (`CharacterBody2D`) with pilot input anti-spoofing (`ApplyServerPilotInput`), state & hull replication, upright overlay UI, and Corvette polygon/thruster rendering.
+  - Integrated player ship spawning, Enemy Target Ship (`Target Drone Corvette`, ID `900`) spawning, late-joiner ship/hull state sync, and decoupled `PlayerCharacter` ship occupancy (`PlayerLocationContext`) in `MatchController` and `GameWorld`.
+  - Updated `NetworkHud` to display live ship telemetry (hull integrity, speed, boost status, operational/disabled state, and sector ship roster).
+  - Built and executed automated multi-instance acceptance test (`Milestone1AcceptanceTest.cs` via `--test-m1`) and resolved all findings from `flash-reviewer`.
 
 ## Current Architecture & Project State
 - **Entry Scene:** `res://Scenes/Main.tscn` (`GameRoot.cs`).
 - **Core Modules:**
   - `SpaceExtraction.Networking.NetworkManager`: ENet session lifecycle & `PlayerIdentity` registry.
-  - `SpaceExtraction.Match.MatchController`: Authoritative match phase & player character spawning/despawning.
-  - `SpaceExtraction.World.GameWorld`: World root with `SpaceEnvironment`, `ShipsContainer`, and `PlayersContainer`.
-  - `SpaceExtraction.Characters.PlayerCharacter`: Server-authoritative `CharacterBody2D` with input RPC validation and client interpolation.
-  - `SpaceExtraction.UI.NetworkHud`: Connection UI and live session inspector.
-  - `SpaceExtraction.Testing.Milestone0AcceptanceTest`: Automated multi-process acceptance test (`--test-m0`).
+  - `SpaceExtraction.Match.MatchController`: Authoritative match phase, player/ship spawning, enemy target drone spawning, and late-joiner replication.
+  - `SpaceExtraction.World.GameWorld`: World root with `SpaceEnvironment`, `ShipsContainer`, `ProjectilesContainer`, and `PlayersContainer`.
+  - `SpaceExtraction.Ships`: `Ship`, `ShipMovementProfile`, `ShipControlInput`, `ShipMovement`, `ShipHull`, `ShipWeapon`, `ShipProjectile`.
+  - `SpaceExtraction.Characters`: `PlayerCharacter`, `PlayerIdentity`, `PlayerLocationContext`, `PlayerInputState`.
+  - `SpaceExtraction.UI.NetworkHud`: Connection UI and live ship/session telemetry.
+  - `SpaceExtraction.Testing`: `Milestone0AcceptanceTest` (`--test-m0`) and `Milestone1AcceptanceTest` (`--test-m1`).
 
-## Explicit Next Steps (Milestone 1 — Basic Ship Gameplay)
-1. Implement `Ship` entity (`Scripts/Ships/`) inside `GameWorld.ShipsContainer` with server-authoritative physics and movement (`ShipMovement`: rotation, acceleration, maximum velocity, braking/deceleration, temporary boost).
-2. Implement basic ship hull integrity (`ShipHull` / health & disabled state).
-3. Implement basic ship weapon firing and projectile/hit detection under server authority.
-4. Implement basic enemy/target ship in the world to test maneuvering, shooting, damaging, and disabling another ship.
-5. Add Milestone 1 acceptance test (`--test-m1`) verifying ship flight, weapons, hull damage, and ship disabling under multiplayer authority.
+## Explicit Next Steps (Milestone 2 — Ship Combat Systems)
+1. Implement 2–3 distinct weapon types (e.g., Autocannon for general damage, Railgun for long-range precision/subsystem pressure, EMP or Missile for system disabling/burst) with weapon switching or multiple weapon mounts.
+2. Implement weapon cooldown and ammunition/reload mechanics.
+3. Implement ship subsystem damage (`ShipSystems`: Engine subsystem health affecting mobility/speed, Weapon/Turret subsystem health disabling weapons).
+4. Implement `ShipTurret` with both **Automated turret behavior** (AI target acquisition & tracking) and **Manual turret control** (superior fire rate/accuracy/range when operated by a crew member).
+5. Build and run Milestone 2 acceptance test (`--test-m2`) verifying weapon variety, subsystem/engine damage effects, automated turret defense, and manual turret operation under server authority.

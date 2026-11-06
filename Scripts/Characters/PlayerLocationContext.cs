@@ -14,11 +14,13 @@ public enum PlayerLocationMode
 }
 
 /// <summary>
-/// Tracks a player's current occupancy context (e.g., open space vs. aboard a specific ship).
+/// Tracks a player's current occupancy context (e.g., open space vs. aboard/piloting a specific ship).
 /// </summary>
 public struct PlayerLocationContext
 {
     public PlayerLocationMode Mode { get; set; }
+    public int OccupiedShipId { get; set; }
+    public bool IsPiloting { get; set; }
     public NodePath OccupiedShipPath { get; set; }
 
     public static PlayerLocationContext CreateWorldSpace()
@@ -26,15 +28,19 @@ public struct PlayerLocationContext
         return new PlayerLocationContext
         {
             Mode = PlayerLocationMode.WorldSpace,
+            OccupiedShipId = 0,
+            IsPiloting = false,
             OccupiedShipPath = new NodePath()
         };
     }
 
-    public static PlayerLocationContext CreateShipInterior(NodePath shipPath)
+    public static PlayerLocationContext CreateShipOccupancy(int shipId, bool isPiloting, NodePath shipPath)
     {
         return new PlayerLocationContext
         {
             Mode = PlayerLocationMode.ShipInterior,
+            OccupiedShipId = shipId,
+            IsPiloting = isPiloting,
             OccupiedShipPath = shipPath
         };
     }

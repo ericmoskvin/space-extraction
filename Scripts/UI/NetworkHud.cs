@@ -3,13 +3,14 @@ using Godot;
 using SpaceExtraction.Characters;
 using SpaceExtraction.Match;
 using SpaceExtraction.Networking;
+using SpaceExtraction.Ships;
 using SpaceExtraction.World;
 
 namespace SpaceExtraction.UI;
 
 /// <summary>
-/// Lightweight debug and connection HUD for Milestone 0.
-/// Allows starting a host, dedicated server, or client, and displays authoritative match/player state.
+/// Debug and connection HUD for Milestone 0 & Milestone 1.
+/// Displays connection controls, authoritative match/player state, and active ship flight/combat telemetry.
 /// </summary>
 public partial class NetworkHud : CanvasLayer
 {
@@ -26,6 +27,7 @@ public partial class NetworkHud : CanvasLayer
     private SpinBox _portSpinBox = null!;
     private Label _statusLabel = null!;
     private Label _sessionSummaryLabel = null!;
+    private Label _localShipLabel = null!;
     private Label _playersListLabel = null!;
 
     private readonly System.Text.StringBuilder _hudStringBuilder = new();
@@ -69,7 +71,7 @@ public partial class NetworkHud : CanvasLayer
         _panel = new PanelContainer
         {
             Position = new Vector2(16f, 16f),
-            CustomMinimumSize = new Vector2(360f, 0f)
+            CustomMinimumSize = new Vector2(390f, 0f)
         };
         AddChild(_panel);
 
@@ -79,7 +81,7 @@ public partial class NetworkHud : CanvasLayer
 
         var titleLabel = new Label
         {
-            Text = "2D SPACE EXTRACTION — MILESTONE 0",
+            Text = "2D SPACE EXTRACTION — MILESTONE 1",
             HorizontalAlignment = HorizontalAlignment.Center
         };
         rootVBox.AddChild(titleLabel);
@@ -147,13 +149,20 @@ public partial class NetworkHud : CanvasLayer
         _sessionSummaryLabel = new Label();
         _sessionBox.AddChild(_sessionSummaryLabel);
 
+        _localShipLabel = new Label
+        {
+            Modulate = new Color(0.65f, 0.95f, 0.8f)
+        };
+        _sessionBox.AddChild(_localShipLabel);
+
         _playersListLabel = new Label();
         _sessionBox.AddChild(_playersListLabel);
 
         var controlsHint = new Label
         {
-            Text = "Controls: WASD or Arrow Keys to Move",
-            Modulate = new Color(0.75f, 0.85f, 1.0f)
+            Text = "W/S: Thrust | A/D: Turn | X/C: Brake | Shift: Boost | Space/Click: Fire",
+            Modulate = new Color(0.75f, 0.85f, 1.0f),
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         _sessionBox.AddChild(controlsHint);
 
@@ -264,19 +273,38 @@ public partial class NetworkHud : CanvasLayer
 
     private void UpdateSessionDetails()
     {
+        var ships = _gameWorld.GetAllShips();
         _sessionSummaryLabel.Text =
             $"Match Phase: {_matchController.CurrentPhase} | Time: {_matchController.ElapsedMatchTime:F1}s\n" +
-            $"Registered Players: {_networkManager.Players.Count}";
+            $"Players: {_networkManager.Players.Count} | Active Ships: {ships.Count}";
+
+        Ship? localShip = _gameWorld.GetShipByPilot(_networkManager.LocalPeerId);
+        if (localShip != null)
+        {
+            string boostState = localShip.Movement.IsBoosting
+                ? "BOOSTING"
+                : (localShip.Movement.BoostCooldownRemaining > 0f
+                    ? $"CD {localShip.Movement.BoostCooldownRemaining:F1}s"
+                    : "READY");
+            string statusState = localShip.Hull.IsDisabled ? "DISABLED" : "OPERATIONAL";
+            _localShipLabel.Text =
+                $"Ship: {localShip.ShipName} [{localShip.ShipClass}] ({statusState})\n" +
+                $"Hull: {localShip.Hull.CurrentHull:F0}/{localShip.Hull.MaxHull:F0} | Speed: {localShip.Velocity.Length():F0} u/s | Boost: {boostState}";
+            _localShipLabel.Visible = true;
+        }
+        else
+        {
+            _localShipLabel.Visible = false;
+        }
 
         _hudStringBuilder.Clear();
-        foreach (var kvp in _networkManager.Players)
+        _hudStringBuilder.AppendLine("Ships in Sector:");
+        for (int i = 0; i < ships.Count; i++)
         {
-            PlayerIdentity identity = kvp.Value;
-            PlayerCharacter? character = _gameWorld.GetPlayerCharacter(identity.PeerId);
-            string posText = character != null
-                ? $"({character.GlobalPosition.X:F0}, {character.GlobalPosition.Y:F0}) [Auth:{character.GetMultiplayerAuthority()}]"
-                : "(Spawning...)";
-            _hudStringBuilder.AppendLine($"• [{identity.PeerId}] {identity.DisplayName} (Team {identity.TeamId}) {posText}");
+            Ship ship = ships[i];
+            string stateTag = ship.Hull.IsDisabled ? " [DISABLED]" : "";
+            _hudStringBuilder.AppendLine(
+                $"• [{ship.ShipId}] {ship.ShipName} Hull:{ship.Hull.CurrentHull:F0}/{ship.Hull.MaxHull:F0}{stateTag} Pos:({ship.GlobalPosition.X:F0},{ship.GlobalPosition.Y:F0})");
         }
 
         _playersListLabel.Text = _hudStringBuilder.ToString().TrimEnd();

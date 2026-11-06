@@ -1,19 +1,22 @@
 using System.Collections.Generic;
 using Godot;
 using SpaceExtraction.Characters;
+using SpaceExtraction.Ships;
 
 namespace SpaceExtraction.World;
 
 /// <summary>
-/// Root world scene container for Milestone 0.
-/// Manages spatial partitioning containers for space environment, ships, and players.
+/// Root world scene container for SpaceExtraction.
+/// Manages spatial partitioning containers for space environment, ships, projectiles, and players.
 /// Renders an observable background grid for visual movement tracking.
 /// </summary>
 public partial class GameWorld : Node2D
 {
     private Node2D? _spaceEnvironment;
     private Node2D? _shipsContainer;
+    private Node2D? _projectilesContainer;
     private Node2D? _playersContainer;
+    private int _nextProjectileId = 1;
 
     public Node2D SpaceEnvironment
     {
@@ -33,6 +36,16 @@ public partial class GameWorld : Node2D
             return _shipsContainer!;
         }
         private set => _shipsContainer = value;
+    }
+
+    public Node2D ProjectilesContainer
+    {
+        get
+        {
+            EnsureContainers();
+            return _projectilesContainer!;
+        }
+        private set => _projectilesContainer = value;
     }
 
     public Node2D PlayersContainer
@@ -78,6 +91,15 @@ public partial class GameWorld : Node2D
             if (_shipsContainer.GetParent() == null)
             {
                 AddChild(_shipsContainer);
+            }
+        }
+
+        if (_projectilesContainer == null || !IsInstanceValid(_projectilesContainer))
+        {
+            _projectilesContainer = GetNodeOrNull<Node2D>("ProjectilesContainer") ?? new Node2D { Name = "ProjectilesContainer" };
+            if (_projectilesContainer.GetParent() == null)
+            {
+                AddChild(_projectilesContainer);
             }
         }
 
@@ -156,5 +178,145 @@ public partial class GameWorld : Node2D
             }
         }
         return list;
+    }
+
+    public Ship? GetShip(int shipId)
+    {
+        EnsureContainers();
+        int count = ShipsContainer.GetChildCount();
+        for (int i = 0; i < count; i++)
+        {
+            if (ShipsContainer.GetChild(i) is Ship ship && ship.ShipId == shipId)
+            {
+                return ship;
+            }
+        }
+        return null;
+    }
+
+    public Ship? GetShipByPilot(long pilotPeerId)
+    {
+        if (pilotPeerId <= 0)
+        {
+            return null;
+        }
+
+        EnsureContainers();
+        int count = ShipsContainer.GetChildCount();
+        for (int i = 0; i < count; i++)
+        {
+            if (ShipsContainer.GetChild(i) is Ship ship && ship.PilotPeerId == pilotPeerId)
+            {
+                return ship;
+            }
+        }
+        return null;
+    }
+
+    public int GetShipCount()
+    {
+        EnsureContainers();
+        return ShipsContainer.GetChildCount();
+    }
+
+    public Ship? GetShipAtIndex(int index)
+    {
+        EnsureContainers();
+        if (index < 0 || index >= ShipsContainer.GetChildCount())
+        {
+            return null;
+        }
+        return ShipsContainer.GetChild(index) as Ship;
+    }
+
+    public IReadOnlyList<Ship> GetAllShips()
+    {
+        EnsureContainers();
+        int count = ShipsContainer.GetChildCount();
+        var list = new List<Ship>(count);
+        for (int i = 0; i < count; i++)
+        {
+            if (ShipsContainer.GetChild(i) is Ship ship)
+            {
+                list.Add(ship);
+            }
+        }
+        return list;
+    }
+
+    public ShipProjectile? GetProjectile(int projectileId)
+    {
+        EnsureContainers();
+        int count = ProjectilesContainer.GetChildCount();
+        for (int i = 0; i < count; i++)
+        {
+            if (ProjectilesContainer.GetChild(i) is ShipProjectile proj && proj.ProjectileId == projectileId)
+            {
+                return proj;
+            }
+        }
+        return null;
+    }
+
+    public int SpawnProjectileServer(
+        int sourceShipId,
+        int sourceTeamId,
+        Vector2 startPosition,
+        Vector2 direction,
+        float speed,
+        float damage,
+        float lifetime,
+        Color boltColor)
+    {
+        if (!Multiplayer.IsServer())
+        {
+            return 0;
+        }
+
+        int projId = _nextProjectileId++;
+        Rpc(MethodName.SpawnProjectileRpc, projId, sourceShipId, sourceTeamId, startPosition, direction, speed, damage, lifetime, boltColor);
+        return projId;
+    }
+
+    public void DespawnProjectileServer(int projectileId)
+    {
+        if (!Multiplayer.IsServer())
+        {
+            return;
+        }
+
+        Rpc(MethodName.DespawnProjectileRpc, projectileId);
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void SpawnProjectileRpc(
+        int projectileId,
+        int sourceShipId,
+        int sourceTeamId,
+        Vector2 startPosition,
+        Vector2 direction,
+        float speed,
+        float damage,
+        float lifetime,
+        Color boltColor)
+    {
+        if (GetProjectile(projectileId) != null)
+        {
+            return;
+        }
+
+        var proj = new ShipProjectile();
+        proj.Initialize(this, projectileId, sourceShipId, sourceTeamId, startPosition, direction, speed, damage, lifetime, boltColor);
+        ProjectilesContainer.AddChild(proj);
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void DespawnProjectileRpc(int projectileId)
+    {
+        ShipProjectile? proj = GetProjectile(projectileId);
+        if (proj != null)
+        {
+            proj.QueueFree();
+        }
     }
 }

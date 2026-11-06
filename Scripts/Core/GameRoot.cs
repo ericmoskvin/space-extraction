@@ -3,6 +3,7 @@ using Godot;
 using SpaceExtraction.Characters;
 using SpaceExtraction.Match;
 using SpaceExtraction.Networking;
+using SpaceExtraction.Ships;
 using SpaceExtraction.Testing;
 using SpaceExtraction.UI;
 using SpaceExtraction.World;
@@ -22,6 +23,7 @@ public partial class GameRoot : Node2D
     public NetworkHud NetworkHud { get; private set; } = null!;
 
     private bool _isTestClient;
+    private bool _isTestShipClient;
     private Vector2 _testClientMoveDir = Vector2.Right;
     private double _testClientElapsed;
 
@@ -46,13 +48,13 @@ public partial class GameRoot : Node2D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (!_isTestClient)
+        if (!_isTestClient && !_isTestShipClient)
         {
             return;
         }
 
         _testClientElapsed += delta;
-        if (_testClientElapsed > 20.0)
+        if (_testClientElapsed > 25.0)
         {
             GetTree().Quit(0);
             return;
@@ -60,10 +62,22 @@ public partial class GameRoot : Node2D
 
         if (NetworkManager.IsOnline && NetworkManager.LocalPeerId > 0)
         {
-            PlayerCharacter? localChar = GameWorld.GetPlayerCharacter(NetworkManager.LocalPeerId);
-            if (localChar != null)
+            if (_isTestShipClient)
             {
-                localChar.SetTestInputOverride(_testClientMoveDir);
+                Ship? localShip = GameWorld.GetShipByPilot(NetworkManager.LocalPeerId);
+                localShip?.SetTestInputOverride(new ShipControlInput
+                {
+                    Throttle = 1.0f,
+                    Turn = 0.35f,
+                    Brake = false,
+                    Boost = false,
+                    FirePrimary = false
+                });
+            }
+            else if (_isTestClient)
+            {
+                PlayerCharacter? localChar = GameWorld.GetPlayerCharacter(NetworkManager.LocalPeerId);
+                localChar?.SetTestInputOverride(_testClientMoveDir);
             }
         }
     }
@@ -77,6 +91,7 @@ public partial class GameRoot : Node2D
         }
 
         bool runM0Test = false;
+        bool runM1Test = false;
         bool startHost = false;
         bool startServer = false;
         bool startClient = false;
@@ -93,9 +108,18 @@ public partial class GameRoot : Node2D
             {
                 runM0Test = true;
             }
+            else if (arg == "--test-m1")
+            {
+                runM1Test = true;
+            }
             else if (arg == "--test-client")
             {
                 _isTestClient = true;
+                startClient = true;
+            }
+            else if (arg == "--test-ship-client")
+            {
+                _isTestShipClient = true;
                 startClient = true;
             }
             else if (arg == "--host")
@@ -138,6 +162,14 @@ public partial class GameRoot : Node2D
         if (runM0Test)
         {
             var testRunner = new Milestone0AcceptanceTest { Name = "Milestone0AcceptanceTest" };
+            testRunner.Initialize(NetworkManager, MatchController, GameWorld);
+            AddChild(testRunner);
+            return;
+        }
+
+        if (runM1Test)
+        {
+            var testRunner = new Milestone1AcceptanceTest { Name = "Milestone1AcceptanceTest" };
             testRunner.Initialize(NetworkManager, MatchController, GameWorld);
             AddChild(testRunner);
             return;
