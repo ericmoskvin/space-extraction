@@ -43,9 +43,19 @@ public sealed class ShipDamageControl
     private readonly List<InteriorRoomType> _burningRoomsCache = new(5);
     private readonly List<InteriorRoomType> _roomsToIgniteCache = new(5);
 
+    public float MaxSupplies { get; private set; } = MaxRepairSupplies;
     public float CurrentRepairSupplies { get; private set; } = MaxRepairSupplies;
+    public float FireHazardMultiplier { get; set; } = 1.0f;
     public float RepairCooldownRemaining { get; private set; }
     public event Action? DamageControlStateChanged;
+
+    public void ConfigureServerSettings(float startingRepairSupplies, float fireHazardMultiplier)
+    {
+        MaxSupplies = Mathf.Max(0f, startingRepairSupplies);
+        CurrentRepairSupplies = MaxSupplies;
+        FireHazardMultiplier = Mathf.Max(0f, fireHazardMultiplier);
+        DamageControlStateChanged?.Invoke();
+    }
 
     public float GetRoomFireIntensity(InteriorRoomType room)
     {
@@ -109,13 +119,14 @@ public sealed class ShipDamageControl
 
     public bool IgniteRoom(InteriorRoomType room, float addedIntensity = 45.0f)
     {
-        if (room == InteriorRoomType.None || !_fireIntensity.ContainsKey(room))
+        if (room == InteriorRoomType.None || !_fireIntensity.ContainsKey(room) || FireHazardMultiplier <= 0.001f)
         {
             return false;
         }
 
+        float scaledIntensity = addedIntensity * Mathf.Clamp(FireHazardMultiplier, 0.5f, 2.0f);
         float current = _fireIntensity[room];
-        float next = Mathf.Clamp(current + addedIntensity, 0f, MaxFireIntensity);
+        float next = Mathf.Clamp(current + scaledIntensity, 0f, MaxFireIntensity);
         _fireIntensity[room] = next;
         DamageControlStateChanged?.Invoke();
         return true;
@@ -173,7 +184,7 @@ public sealed class ShipDamageControl
             return false;
         }
 
-        CurrentRepairSupplies = Mathf.Max(0f, CurrentRepairSupplies - RepairSupplyCostPerAction);
+        CurrentRepairSupplies = Mathf.Clamp(CurrentRepairSupplies - RepairSupplyCostPerAction, 0f, MaxSupplies);
         RepairCooldownRemaining = RepairCooldownSeconds;
         subsystems.RepairSubsystem(sys, RepairAmountPerAction);
         DamageControlStateChanged?.Invoke();
@@ -220,7 +231,7 @@ public sealed class ShipDamageControl
             float intensity = _fireIntensity[room];
 
             // 1. Fire Growth
-            float newIntensity = Mathf.Min(MaxFireIntensity, intensity + FireGrowthPerSecond * delta);
+            float newIntensity = Mathf.Min(MaxFireIntensity, intensity + FireGrowthPerSecond * FireHazardMultiplier * delta);
             if (Mathf.Abs(newIntensity - intensity) > 0.001f)
             {
                 _fireIntensity[room] = newIntensity;
@@ -241,7 +252,7 @@ public sealed class ShipDamageControl
 
                 if (currentHealth > 0.0f)
                 {
-                    float fireDmg = 4.0f * (intensity / 50.0f) * delta;
+                    float fireDmg = 4.0f * (intensity / 50.0f) * FireHazardMultiplier * delta;
                     subsystems.ApplySubsystemDamage(sys, fireDmg);
                     subsystemsDamagedByFire = true;
 
@@ -263,7 +274,7 @@ public sealed class ShipDamageControl
             // 3. Controlled Fire Spread
             if (intensity >= FireSpreadThreshold)
             {
-                float spreadTimer = _spreadTimers[room] + delta;
+                float spreadTimer = _spreadTimers[room] + delta * FireHazardMultiplier;
                 if (spreadTimer >= FireSpreadIntervalOpenDoor)
                 {
                     _spreadTimers[room] = 0f;
@@ -314,7 +325,7 @@ public sealed class ShipDamageControl
         _fireIntensity[InteriorRoomType.EngineRoom] = Mathf.Clamp(engineFire, 0f, MaxFireIntensity);
         _fireIntensity[InteriorRoomType.Cargo] = Mathf.Clamp(cargoFire, 0f, MaxFireIntensity);
         _fireIntensity[InteriorRoomType.Medical] = Mathf.Clamp(medicalFire, 0f, MaxFireIntensity);
-        CurrentRepairSupplies = Mathf.Clamp(repairSupplies, 0f, MaxRepairSupplies);
+        CurrentRepairSupplies = Mathf.Clamp(repairSupplies, 0f, MaxSupplies);
         DamageControlStateChanged?.Invoke();
     }
 }

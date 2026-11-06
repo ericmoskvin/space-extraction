@@ -27,6 +27,10 @@
   - Implemented server-authoritative firefighting (`ExtinguishRoom` via `E`/`R`) and subsystem repair (`TryRepairRoomSubsystem` via `R` or Engineering/Turret Console `E`), enforcing that active fire in a compartment blocks repairing that compartment's subsystem until extinguished, consuming finite ship repair supplies (`100` max, `10` per repair action), and restoring disabled (`0` HP) subsystems.
   - Added cutaway interior fire visuals (pulsing orange/red room glow, flame tongues, smoke rings, `[FIRE XX%]` labels) and exterior roof emergency fire venting indicators in `Ship._Draw()`, plus repair supply and emergency alerts in `NetworkHud`.
   - Built and executed `Milestone4AcceptanceTest` (`--test-m4`) and resolved all `flash-reviewer` findings.
+  - **Combat Balance & Server Configuration Menu:**
+    - Tripled default Ship Hull HP (`720 HP` Corvette, `480 HP` Scout, `1440 HP` Freighter) so ships survive long enough for subsystem damage, firefighting, and repairs to matter.
+    - Increased default automated turret targeting range (`DefaultAutoAcquireRange = 1100.0f` units, up from `460.0f`, with `1050 u/s` velocity and `1.75s` lifetime) to match the `2x` ship scale.
+    - Added authoritative `ServerConfig` (`Scripts/Match/ServerConfig.cs`) replicated via `MatchController.SyncServerConfigRpc` and a pre-host **Server Balance & Rules Settings** menu in `NetworkHud.cs` allowing hosts to configure Corvette Hull HP, Subsystem HP Multiplier, Auto-Turret Range, Weapon Damage Multiplier, Ship Speed Multiplier, Starting Repair Supplies, Fire Hazard Multiplier, Target Drone Turret Active, and Spawn Target Drone.
 
 ## User Feel & Tuning Backlog (Deferred to Combat/Flight Polish Pass)
 1. **Tactical On-Foot Movement Speed:** Slow down on-foot interior movement speed when tuning boarding combat (Milestone 5+) so ship-interior gunfights and breach maneuvers feel deliberate and tactical.

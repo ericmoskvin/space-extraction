@@ -31,6 +31,17 @@ public partial class NetworkHud : CanvasLayer
     private Label _localShipLabel = null!;
     private Label _playersListLabel = null!;
 
+    private PanelContainer _serverConfigPanel = null!;
+    private SpinBox _cfgHullSpin = null!;
+    private SpinBox _cfgSubsystemSpin = null!;
+    private SpinBox _cfgTurretRangeSpin = null!;
+    private SpinBox _cfgWeaponDmgSpin = null!;
+    private SpinBox _cfgSpeedSpin = null!;
+    private SpinBox _cfgSuppliesSpin = null!;
+    private SpinBox _cfgFireHazardSpin = null!;
+    private CheckBox _cfgDroneTurretCheck = null!;
+    private CheckBox _cfgSpawnDroneCheck = null!;
+
     private readonly System.Text.StringBuilder _hudStringBuilder = new();
     private double _hudUpdateAccumulator;
 
@@ -139,6 +150,16 @@ public partial class NetworkHud : CanvasLayer
         dedicatedButton.Pressed += OnDedicatedServerPressed;
         _connectionBox.AddChild(dedicatedButton);
 
+        var configToggleBtn = new Button { Text = "Server Balance & Rules Settings..." };
+        configToggleBtn.Pressed += () =>
+        {
+            if (_serverConfigPanel != null)
+            {
+                _serverConfigPanel.Visible = !_serverConfigPanel.Visible;
+            }
+        };
+        _connectionBox.AddChild(configToggleBtn);
+
         // Active session container
         _sessionBox = new VBoxContainer
         {
@@ -212,6 +233,7 @@ public partial class NetworkHud : CanvasLayer
         disconnectButton.Pressed += OnDisconnectPressed;
         _sessionBox.AddChild(disconnectButton);
 
+        BuildServerConfigPanel();
         RefreshUiState();
     }
 
@@ -233,8 +255,135 @@ public partial class NetworkHud : CanvasLayer
         }
     }
 
+    private void BuildServerConfigPanel()
+    {
+        _serverConfigPanel = new PanelContainer
+        {
+            Position = new Vector2(420f, 16f),
+            CustomMinimumSize = new Vector2(430f, 0f),
+            Visible = false
+        };
+        AddChild(_serverConfigPanel);
+
+        var vbox = new VBoxContainer();
+        vbox.AddThemeConstantOverride("separation", 6);
+        _serverConfigPanel.AddChild(vbox);
+
+        var title = new Label
+        {
+            Text = "SERVER COMBAT & BALANCE CONFIG",
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        title.AddThemeColorOverride("font_color", new Color(1f, 0.85f, 0.4f));
+        vbox.AddChild(title);
+
+        static HBoxContainer CreateConfigRow(string labelText, Control inputControl)
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 8);
+            var lbl = new Label
+            {
+                Text = labelText,
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+            };
+            row.AddChild(lbl);
+            row.AddChild(inputControl);
+            return row;
+        }
+
+        _cfgHullSpin = new SpinBox { MinValue = 100, MaxValue = 5000, Step = 50, Value = ServerConfig.DefaultCorvetteHullHp, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Corvette Hull HP (Default 720):", _cfgHullSpin));
+
+        _cfgSubsystemSpin = new SpinBox { MinValue = 0.25, MaxValue = 5.0, Step = 0.25, Value = ServerConfig.DefaultSubsystemHealthMultiplier, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Subsystem HP Multiplier:", _cfgSubsystemSpin));
+
+        _cfgTurretRangeSpin = new SpinBox { MinValue = 300, MaxValue = 2500, Step = 50, Value = ServerConfig.DefaultTurretAutoRange, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Turret Auto Range (Default 1100):", _cfgTurretRangeSpin));
+
+        _cfgWeaponDmgSpin = new SpinBox { MinValue = 0.25, MaxValue = 5.0, Step = 0.25, Value = ServerConfig.DefaultWeaponDamageMultiplier, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Weapon Damage Multiplier:", _cfgWeaponDmgSpin));
+
+        _cfgSpeedSpin = new SpinBox { MinValue = 0.25, MaxValue = 3.0, Step = 0.1, Value = ServerConfig.DefaultShipSpeedMultiplier, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Ship Speed Multiplier:", _cfgSpeedSpin));
+
+        _cfgSuppliesSpin = new SpinBox { MinValue = 0, MaxValue = 500, Step = 10, Value = ServerConfig.DefaultStartingRepairSupplies, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Starting Repair Supplies:", _cfgSuppliesSpin));
+
+        _cfgFireHazardSpin = new SpinBox { MinValue = 0.0, MaxValue = 3.0, Step = 0.25, Value = ServerConfig.DefaultFireHazardMultiplier, CustomMinimumSize = new Vector2(110f, 0f) };
+        vbox.AddChild(CreateConfigRow("Fire Hazard Multiplier:", _cfgFireHazardSpin));
+
+        _cfgDroneTurretCheck = new CheckBox { Text = "Target Drone Turret Active (Fires Back)", ButtonPressed = false };
+        vbox.AddChild(_cfgDroneTurretCheck);
+
+        _cfgSpawnDroneCheck = new CheckBox { Text = "Spawn Target Drone on Start", ButtonPressed = true };
+        vbox.AddChild(_cfgSpawnDroneCheck);
+
+        var btnRow = new HBoxContainer();
+        btnRow.AddThemeConstantOverride("separation", 6);
+        vbox.AddChild(btnRow);
+
+        var resetBtn = new Button { Text = "Reset Defaults", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        resetBtn.Pressed += ResetConfigInputsToDefaults;
+        btnRow.AddChild(resetBtn);
+
+        var closeBtn = new Button { Text = "Close", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        closeBtn.Pressed += () => _serverConfigPanel.Visible = false;
+        btnRow.AddChild(closeBtn);
+
+        var hostWithSettingsBtn = new Button { Text = "Host Match with These Settings" };
+        hostWithSettingsBtn.Pressed += () =>
+        {
+            ApplyUiConfigToServer();
+            _serverConfigPanel.Visible = false;
+            OnHostPressed();
+        };
+        vbox.AddChild(hostWithSettingsBtn);
+    }
+
+    private void ApplyUiConfigToServer()
+    {
+        if (_matchController == null || _cfgHullSpin == null)
+        {
+            return;
+        }
+
+        var cfg = new ServerConfig
+        {
+            CorvetteHullHp = (float)_cfgHullSpin.Value,
+            SubsystemHealthMultiplier = (float)_cfgSubsystemSpin.Value,
+            TurretAutoRange = (float)_cfgTurretRangeSpin.Value,
+            WeaponDamageMultiplier = (float)_cfgWeaponDmgSpin.Value,
+            ShipSpeedMultiplier = (float)_cfgSpeedSpin.Value,
+            StartingRepairSupplies = (float)_cfgSuppliesSpin.Value,
+            FireHazardMultiplier = (float)_cfgFireHazardSpin.Value,
+            TargetDroneTurretActive = _cfgDroneTurretCheck.ButtonPressed,
+            SpawnTargetDrone = _cfgSpawnDroneCheck.ButtonPressed
+        };
+
+        _matchController.SetServerConfig(cfg);
+    }
+
+    private void ResetConfigInputsToDefaults()
+    {
+        if (_cfgHullSpin == null)
+        {
+            return;
+        }
+
+        _cfgHullSpin.Value = ServerConfig.DefaultCorvetteHullHp;
+        _cfgSubsystemSpin.Value = ServerConfig.DefaultSubsystemHealthMultiplier;
+        _cfgTurretRangeSpin.Value = ServerConfig.DefaultTurretAutoRange;
+        _cfgWeaponDmgSpin.Value = ServerConfig.DefaultWeaponDamageMultiplier;
+        _cfgSpeedSpin.Value = ServerConfig.DefaultShipSpeedMultiplier;
+        _cfgSuppliesSpin.Value = ServerConfig.DefaultStartingRepairSupplies;
+        _cfgFireHazardSpin.Value = ServerConfig.DefaultFireHazardMultiplier;
+        _cfgDroneTurretCheck.ButtonPressed = false;
+        _cfgSpawnDroneCheck.ButtonPressed = true;
+    }
+
     private void OnHostPressed()
     {
+        ApplyUiConfigToServer();
         int port = (int)_portSpinBox.Value;
         Error err = _networkManager.StartHost(port, _nameEdit.Text);
         if (err != Error.Ok)
@@ -246,6 +395,7 @@ public partial class NetworkHud : CanvasLayer
 
     private void OnDedicatedServerPressed()
     {
+        ApplyUiConfigToServer();
         int port = (int)_portSpinBox.Value;
         Error err = _networkManager.StartDedicatedServer(port);
         if (err != Error.Ok)
@@ -302,6 +452,10 @@ public partial class NetworkHud : CanvasLayer
         bool activeOrConnecting = _networkManager.IsOnline || _networkManager.IsConnecting;
         _connectionBox.Visible = !activeOrConnecting;
         _sessionBox.Visible = activeOrConnecting;
+        if (activeOrConnecting && _serverConfigPanel != null)
+        {
+            _serverConfigPanel.Visible = false;
+        }
 
         if (_networkManager.IsOnline)
         {
@@ -316,9 +470,11 @@ public partial class NetworkHud : CanvasLayer
     private void UpdateSessionDetails()
     {
         var ships = _gameWorld.GetAllShips();
+        var cfg = _matchController.Config;
         _sessionSummaryLabel.Text =
             $"Match Phase: {_matchController.CurrentPhase} | Time: {_matchController.ElapsedMatchTime:F1}s\n" +
-            $"Players: {_networkManager.Players.Count} | Active Ships: {ships.Count}";
+            $"Players: {_networkManager.Players.Count} | Active Ships: {ships.Count}\n" +
+            $"Rules: Hull={cfg.CorvetteHullHp:F0} HP | TurretRange={cfg.TurretAutoRange:F0} | WpnDmg={cfg.WeaponDamageMultiplier:F2}x | Spd={cfg.ShipSpeedMultiplier:F2}x | Supplies={cfg.StartingRepairSupplies:F0} | Fire={cfg.FireHazardMultiplier:F2}x";
 
         PlayerCharacter? localChar = _gameWorld.GetPlayerCharacter(_networkManager.LocalPeerId);
         Ship? localShip = (localChar != null && localChar.LocationContext.OccupiedShipId > 0)
@@ -399,7 +555,7 @@ public partial class NetworkHud : CanvasLayer
             }
 
             string suppliesText = localShip.DamageControl != null
-                ? $" | Supplies: {localShip.DamageControl.CurrentRepairSupplies:F0}/{ShipDamageControl.MaxRepairSupplies:F0}"
+                ? $" | Supplies: {localShip.DamageControl.CurrentRepairSupplies:F0}/{localShip.DamageControl.MaxSupplies:F0}"
                 : string.Empty;
 
             _localShipLabel.Text =

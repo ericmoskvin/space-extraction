@@ -223,7 +223,7 @@ public partial class Milestone2AcceptanceTest : Node
                         return;
                     }
 
-                    _targetShip.Hull.Repair(500.0f);
+                    _targetShip.Hull.Repair(2000.0f);
                     _targetShip.Subsystems.RepairSubsystem(ShipSubsystemType.Engines, 500.0f);
 
                     // Move Host Ship and Target Ship to (900, 0) away from other ships so Target Ship is the nearest enemy within Automated Turret range (220 units away, perpendicular to Host ship)

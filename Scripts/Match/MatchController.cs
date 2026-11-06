@@ -22,8 +22,11 @@ public partial class MatchController : Node
 
     public MatchPhase CurrentPhase { get; private set; } = MatchPhase.WaitingForPlayers;
     public double ElapsedMatchTime { get; private set; }
+    public ServerConfig Config { get; private set; } = new();
 
     public event Action<MatchPhase>? PhaseChanged;
+
+    public void SetServerConfig(ServerConfig config) => Config = config.CloneSanitized();
 
     public void Initialize(NetworkManager networkManager, GameWorld gameWorld)
     {
@@ -65,8 +68,21 @@ public partial class MatchController : Node
 
         ElapsedMatchTime = 0.0;
         Rpc(MethodName.SyncMatchPhaseRpc, (int)MatchPhase.InProgress, 0.0);
+        Rpc(MethodName.SyncServerConfigRpc,
+            Config.CorvetteHullHp,
+            Config.SubsystemHealthMultiplier,
+            Config.TurretAutoRange,
+            Config.WeaponDamageMultiplier,
+            Config.ShipSpeedMultiplier,
+            Config.StartingRepairSupplies,
+            Config.FireHazardMultiplier,
+            Config.TargetDroneTurretActive,
+            Config.SpawnTargetDrone);
 
-        EnsureEnemyTargetShipSpawned();
+        if (Config.SpawnTargetDrone)
+        {
+            EnsureEnemyTargetShipSpawned();
+        }
 
         if (_networkManager != null && _gameWorld != null)
         {
@@ -145,6 +161,16 @@ public partial class MatchController : Node
 
         // Sync current phase and elapsed time to the newly connected player
         RpcId(identity.PeerId, MethodName.SyncMatchPhaseRpc, (int)CurrentPhase, ElapsedMatchTime);
+        RpcId(identity.PeerId, MethodName.SyncServerConfigRpc,
+            Config.CorvetteHullHp,
+            Config.SubsystemHealthMultiplier,
+            Config.TurretAutoRange,
+            Config.WeaponDamageMultiplier,
+            Config.ShipSpeedMultiplier,
+            Config.StartingRepairSupplies,
+            Config.FireHazardMultiplier,
+            Config.TargetDroneTurretActive,
+            Config.SpawnTargetDrone);
 
         // Sync all existing characters to the newly joined player
         foreach (PlayerCharacter existingChar in _gameWorld.GetAllPlayerCharacters())
@@ -354,6 +380,40 @@ public partial class MatchController : Node
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void SyncServerConfigRpc(
+        float corvetteHullHp,
+        float subMulti,
+        float turretRange,
+        float wpnDmg,
+        float shipSpd,
+        float supplies,
+        float fireMulti,
+        bool droneTurretActive,
+        bool spawnDrone)
+    {
+        Config = new ServerConfig
+        {
+            CorvetteHullHp = corvetteHullHp,
+            SubsystemHealthMultiplier = subMulti,
+            TurretAutoRange = turretRange,
+            WeaponDamageMultiplier = wpnDmg,
+            ShipSpeedMultiplier = shipSpd,
+            StartingRepairSupplies = supplies,
+            FireHazardMultiplier = fireMulti,
+            TargetDroneTurretActive = droneTurretActive,
+            SpawnTargetDrone = spawnDrone
+        }.CloneSanitized();
+
+        if (_gameWorld != null)
+        {
+            foreach (Ship ship in _gameWorld.GetAllShips())
+            {
+                ship.ApplyServerConfig(Config, resetHealthAndSupplies: false);
+            }
+        }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void SpawnShipRpc(
         int shipId,
         string shipName,
@@ -375,6 +435,7 @@ public partial class MatchController : Node
         {
             ship = new Ship();
             ship.Initialize(_gameWorld, shipId, shipName, (ShipClassType)shipClassInt, ownerTeamId, pilotPeerId, isNpcTarget, shipColor, spawnPosition, spawnRotation);
+            ship.ApplyServerConfig(Config, resetHealthAndSupplies: true);
             _gameWorld.ShipsContainer.AddChild(ship);
             GD.Print($"[MatchController] Spawned ship {shipId} ({shipName}) at {spawnPosition}");
         }

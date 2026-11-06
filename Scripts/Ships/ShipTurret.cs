@@ -9,8 +9,9 @@ namespace SpaceExtraction.Ships;
 /// </summary>
 public sealed class ShipTurret
 {
-    public const float AutoAcquireRange = 460.0f;
-    public const float ManualEffectiveRange = 850.0f;
+    public const float DefaultAutoAcquireRange = 1100.0f;
+    public float AutoAcquireRange { get; set; } = DefaultAutoAcquireRange;
+    public const float ManualEffectiveRange = 1500.0f;
     public const float AutoTurnSpeedRadians = 2.4f;
     public const float ManualTurnSpeedRadians = 7.5f;
     public const float AutoFireAlignmentTolerance = 0.20f;

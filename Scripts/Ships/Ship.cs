@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using SpaceExtraction.Characters;
 using SpaceExtraction.Interiors;
+using SpaceExtraction.Match;
 using SpaceExtraction.World;
 
 namespace SpaceExtraction.Ships;
@@ -64,6 +65,7 @@ public partial class Ship : CharacterBody2D
     private bool _prevToggleKey;
     private float _damageControlSyncAccumulator;
     private float _subsystemFireSyncAccumulator;
+    private bool _npcTurretActive;
 
     private readonly HashSet<long> _occupantPeerIds = new();
 
@@ -188,6 +190,40 @@ public partial class Ship : CharacterBody2D
 
         SetPilot(pilotPeerId);
         SetMultiplayerAuthority(1);
+
+        if (_collisionShape?.Shape is CircleShape2D circle)
+        {
+            circle.Radius = MovementProfile.CollisionRadius;
+        }
+
+        UpdateOverlayText();
+        QueueRedraw();
+    }
+
+    public void ApplyServerConfig(ServerConfig config, bool resetHealthAndSupplies = true)
+    {
+        float hullScale = config.CorvetteHullHp / ServerConfig.DefaultCorvetteHullHp;
+        MovementProfile = ShipMovementProfile.FromClass(ShipClass).WithServerMultipliers(hullScale, config.ShipSpeedMultiplier);
+        Movement = new ShipMovement(MovementProfile);
+
+        if (resetHealthAndSupplies)
+        {
+            Hull.SetStateFromReplication(MovementProfile.MaxHullIntegrity, MovementProfile.MaxHullIntegrity, false);
+            Subsystems.ApplyMaxHealthMultiplier(config.SubsystemHealthMultiplier, true);
+            DamageControl.ConfigureServerSettings(config.StartingRepairSupplies, config.FireHazardMultiplier);
+        }
+        else
+        {
+            Subsystems.ApplyMaxHealthMultiplier(config.SubsystemHealthMultiplier, false);
+        }
+
+        Turret.AutoAcquireRange = config.TurretAutoRange;
+        for (int i = 0; i < _weapons.Length; i++)
+        {
+            _weapons[i].DamageMultiplier = config.WeaponDamageMultiplier;
+        }
+        Turret.Weapon.DamageMultiplier = config.WeaponDamageMultiplier;
+        _npcTurretActive = config.TargetDroneTurretActive;
 
         if (_collisionShape?.Shape is CircleShape2D circle)
         {
@@ -1276,10 +1312,10 @@ public partial class Ship : CharacterBody2D
                     muzzlePos,
                     fireDir,
                     PrimaryWeapon.ProjectileSpeed,
-                    PrimaryWeapon.ProjectileDamage,
+                    PrimaryWeapon.EffectiveProjectileDamage,
                     PrimaryWeapon.ProjectileLifetime,
                     PrimaryWeapon.BoltColor,
-                    PrimaryWeapon.SubsystemDamage,
+                    PrimaryWeapon.EffectiveSubsystemDamage,
                     (int)SelectedTargetSubsystem);
             }
 
@@ -1295,16 +1331,22 @@ public partial class Ship : CharacterBody2D
                         tMuzzle,
                         tDir,
                         Turret.Weapon.ProjectileSpeed,
-                        Turret.Weapon.ProjectileDamage,
+                        Turret.Weapon.EffectiveProjectileDamage,
                         Turret.Weapon.ProjectileLifetime,
                         Turret.Weapon.BoltColor,
-                        Turret.Weapon.SubsystemDamage,
+                        Turret.Weapon.EffectiveSubsystemDamage,
                         (int)_currentTurretInput.TargetSubsystem);
                 }
             }
             else // Turret.IsAutomatedMode
             {
-                Ship? nearestEnemy = _gameWorld?.FindNearestEnemyShip(ShipId, OwnerTeamId, GlobalPosition, ShipTurret.AutoAcquireRange);
+                Ship? nearestEnemy = null;
+                if (!IsNpcTarget || _npcTurretActive)
+                {
+                    Vector2 mountPos = Turret.GetMountWorldPosition(GlobalPosition, Rotation);
+                    nearestEnemy = _gameWorld?.FindNearestEnemyShip(ShipId, OwnerTeamId, mountPos, Turret.AutoAcquireRange);
+                }
+
                 if (Turret.StepAutomatedServer(dt, turretDisabled, GlobalPosition, Rotation, nearestEnemy, out Vector2 tMuzzle, out Vector2 tDir) && _gameWorld != null)
                 {
                     _gameWorld.SpawnProjectileServer(
@@ -1313,10 +1355,10 @@ public partial class Ship : CharacterBody2D
                         tMuzzle,
                         tDir,
                         Turret.Weapon.ProjectileSpeed,
-                        Turret.Weapon.ProjectileDamage,
+                        Turret.Weapon.EffectiveProjectileDamage,
                         Turret.Weapon.ProjectileLifetime,
                         Turret.Weapon.BoltColor,
-                        Turret.Weapon.SubsystemDamage,
+                        Turret.Weapon.EffectiveSubsystemDamage,
                         (int)ShipSubsystemType.Engines);
                 }
             }

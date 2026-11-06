@@ -21,7 +21,7 @@ namespace SpaceExtraction.Testing;
 public partial class Milestone1AcceptanceTest : Node
 {
     private const int TestPort = 17791;
-    private const double TimeoutSeconds = 22.0;
+    private const double TimeoutSeconds = 30.0;
 
     private NetworkManager _networkManager = null!;
     private MatchController _matchController = null!;

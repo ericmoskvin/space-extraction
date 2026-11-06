@@ -28,6 +28,10 @@ public sealed class ShipWeapon
     public float ReloadDuration { get; init; } = 1.4f;
     public Color BoltColor { get; init; } = new Color(1.0f, 0.85f, 0.25f);
     public Vector2 LocalMuzzleOffset { get; init; } = new Vector2(198.0f, 0.0f);
+    public float DamageMultiplier { get; set; } = 1.0f;
+
+    public float EffectiveProjectileDamage => ProjectileDamage * DamageMultiplier;
+    public float EffectiveSubsystemDamage => SubsystemDamage * DamageMultiplier;
 
     public int CurrentAmmo { get; private set; }
     public bool IsReloading { get; private set; }
@@ -55,7 +59,7 @@ public sealed class ShipWeapon
             ProjectileSpeed = 950.0f,
             ProjectileDamage = 35.0f,
             SubsystemDamage = 15.0f,
-            ProjectileLifetime = 1.6f,
+            ProjectileLifetime = 1.8f,
             ReloadDuration = 1.4f,
             BoltColor = new Color(1.0f, 0.85f, 0.25f),
             LocalMuzzleOffset = new Vector2(198.0f, 0.0f)
@@ -75,7 +79,7 @@ public sealed class ShipWeapon
             ProjectileSpeed = 1650.0f,
             ProjectileDamage = 70.0f,
             SubsystemDamage = 65.0f,
-            ProjectileLifetime = 1.5f,
+            ProjectileLifetime = 1.75f,
             ReloadDuration = 2.0f,
             BoltColor = new Color(0.45f, 0.95f, 1.0f),
             LocalMuzzleOffset = new Vector2(198.0f, 0.0f)
@@ -96,7 +100,7 @@ public sealed class ShipWeapon
             ProjectileSpeed = 880.0f,
             ProjectileDamage = 8.0f,
             SubsystemDamage = 90.0f,
-            ProjectileLifetime = 1.6f,
+            ProjectileLifetime = 1.75f,
             ReloadDuration = 1.7f,
             BoltColor = new Color(0.65f, 0.35f, 1.0f),
             LocalMuzzleOffset = new Vector2(198.0f, 0.0f)
@@ -113,10 +117,10 @@ public sealed class ShipWeapon
             WeaponType = ShipWeaponType.Autocannon,
             WeaponName = "Dorsal Turret",
             FireCooldown = 0.24f,
-            ProjectileSpeed = 1000.0f,
+            ProjectileSpeed = 1050.0f,
             ProjectileDamage = 24.0f,
             SubsystemDamage = 12.0f,
-            ProjectileLifetime = 1.4f,
+            ProjectileLifetime = 1.75f,
             ReloadDuration = 1.5f,
             BoltColor = new Color(1.0f, 0.55f, 0.2f),
             LocalMuzzleOffset = new Vector2(28.0f, 0.0f)

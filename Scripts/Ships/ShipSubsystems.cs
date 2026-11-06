@@ -123,4 +123,27 @@ public sealed class ShipSubsystems
         CurrentTurretHealth = Mathf.Clamp(turretHealth, 0.0f, MaxTurretHealth);
         SubsystemsChanged?.Invoke();
     }
+
+    public void ApplyMaxHealthMultiplier(float multiplier, bool restoreFull = true)
+    {
+        float m = Mathf.Max(0.1f, multiplier);
+        MaxEngineHealth = 120.0f * m;
+        MaxWeaponsHealth = 100.0f * m;
+        MaxTurretHealth = 100.0f * m;
+
+        if (restoreFull)
+        {
+            CurrentEngineHealth = MaxEngineHealth;
+            CurrentWeaponsHealth = MaxWeaponsHealth;
+            CurrentTurretHealth = MaxTurretHealth;
+        }
+        else
+        {
+            CurrentEngineHealth = Mathf.Min(CurrentEngineHealth, MaxEngineHealth);
+            CurrentWeaponsHealth = Mathf.Min(CurrentWeaponsHealth, MaxWeaponsHealth);
+            CurrentTurretHealth = Mathf.Min(CurrentTurretHealth, MaxTurretHealth);
+        }
+
+        SubsystemsChanged?.Invoke();
+    }
 }

@@ -44,7 +44,7 @@ public sealed class ShipMovementProfile
             BoostAccelerationMultiplier = 2.2f,
             BoostDuration = 1.4f,
             BoostCooldown = 3.5f,
-            MaxHullIntegrity = 160.0f,
+            MaxHullIntegrity = 480.0f,
             CollisionRadius = 22.0f
         };
     }
@@ -67,7 +67,7 @@ public sealed class ShipMovementProfile
             BoostAccelerationMultiplier = 2.0f,
             BoostDuration = 1.5f,
             BoostCooldown = 4.0f,
-            MaxHullIntegrity = 240.0f,
+            MaxHullIntegrity = 720.0f,
             CollisionRadius = 28.0f
         };
     }
@@ -87,7 +87,7 @@ public sealed class ShipMovementProfile
             BoostAccelerationMultiplier = 1.75f,
             BoostDuration = 1.8f,
             BoostCooldown = 5.5f,
-            MaxHullIntegrity = 480.0f,
+            MaxHullIntegrity = 1440.0f,
             CollisionRadius = 38.0f
         };
     }
@@ -99,6 +99,26 @@ public sealed class ShipMovementProfile
             ShipClassType.Scout => CreateScout(),
             ShipClassType.Freighter => CreateFreighter(),
             _ => CreateCorvette()
+        };
+    }
+
+    public ShipMovementProfile WithServerMultipliers(float hullScale, float speedMultiplier)
+    {
+        return new ShipMovementProfile
+        {
+            ShipClass = ShipClass,
+            ForwardAcceleration = ForwardAcceleration * speedMultiplier,
+            ReverseAcceleration = ReverseAcceleration * speedMultiplier,
+            MaxSpeed = MaxSpeed * speedMultiplier,
+            TurnSpeedRadians = TurnSpeedRadians,
+            BrakingDeceleration = BrakingDeceleration * speedMultiplier,
+            PassiveDrag = PassiveDrag,
+            BoostSpeedMultiplier = BoostSpeedMultiplier,
+            BoostAccelerationMultiplier = BoostAccelerationMultiplier,
+            BoostDuration = BoostDuration,
+            BoostCooldown = BoostCooldown,
+            MaxHullIntegrity = MaxHullIntegrity * hullScale,
+            CollisionRadius = CollisionRadius
         };
     }
 }
