@@ -1,3 +1,17 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# C# / .NET build artifacts and IDE files
+bin/
+obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.ntvs_analysis.dat
+*.Log
+Export/

@@ -6,7 +6,11 @@ description: >
   tests, boilerplate, small refactors, and other tasks that do not require
   architectural decision-making.
 model: flash
+enableWriteTools: true
 tools:
+  - read_file
+  - write_file
+  - edit_file
   - view_file
   - replace_file_content
   - grep_search

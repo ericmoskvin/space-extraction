@@ -6,7 +6,9 @@ description: >
   understanding dependencies, identifying implementation options, and
   answering narrowly scoped technical questions.
 model: flash
+enableWriteTools: false
 tools:
+  - read_file
   - view_file
   - grep_search
   - run_command

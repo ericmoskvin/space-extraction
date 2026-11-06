@@ -7,7 +7,9 @@ description: >
   and adherence to project conventions. This agent should be used after
   implementation work when an independent review would reduce risk.
 model: flash
+enableWriteTools: false
 tools:
+  - read_file
   - view_file
   - grep_search
   - run_command
